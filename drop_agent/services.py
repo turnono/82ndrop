@@ -1,6 +1,5 @@
 import os
-import vertexai
-from google.adk.sessions import VertexAiSessionService
+from google.adk.sessions import InMemorySessionService
 from google.adk.memory import InMemoryMemoryService
 from google.adk.runners import Runner
 
@@ -14,15 +13,14 @@ def get_runner():
     """Initialize and return the ADK Runner."""
     global _runner
     if _runner is None:
-        vertexai.init(project=PROJECT_ID, location=LOCATION)
-        session_service = VertexAiSessionService()
+        session_service = InMemorySessionService()
         memory_service = InMemoryMemoryService()
 
-        from .agent import task_master_agent
+        from .agent import root_agent
 
         _runner = Runner(
             app_name=APP_NAME,
-            agent=task_master_agent,
+            agent=root_agent,
             session_service=session_service,
             memory_service=memory_service,
         )

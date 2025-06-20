@@ -8,9 +8,9 @@ from .sub_agents import (
     prompt_writer_agent,
 )
 
-task_master_agent = Agent(
+root_agent = Agent(
     name="task_master_agent",
-    model="gemini-1.5-flash",
+    model="gemini-2.0-flash",
     instruction=PROMPT,
     tools=[
         AgentTool(agent=guide_agent),

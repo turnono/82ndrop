@@ -4,7 +4,7 @@ from .prompt import DESCRIPTION, INSTRUCTION
 
 search_agent = Agent(
     name="search_agent",
-    model="gemini-2.0-flash",
+    model="gemini-pro",
     description=DESCRIPTION,
     instruction=INSTRUCTION,
     tools=[google_search],
