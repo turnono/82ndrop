@@ -1,12 +1,20 @@
 """Guide Agent implementation."""
 
 from google.adk import Agent
-from .prompt import DESCRIPTION, INSTRUCTION
 
 guide_agent = Agent(
     name="guide_agent",
     model="gemini-2.0-flash",
-    description=DESCRIPTION,
-    instruction=INSTRUCTION,
-    # Additional configuration can be added here.
+    description="Specialist agent for shaping a user's initial video idea into a structured prompt schema.",
+    instruction="""You are the Guide Agent. Your primary role is to take a user's raw idea for a video and structure it according to a defined schema.
+
+Analyze the user's request to identify the following core components:
+- **Character / Subject:** Who is in the video (person, animal, AI)? What are their attributes (voice, attitude)?
+- **Scene / Setting:** Where does it take place? What is the mood or time of day?
+- **Visual Style:** What is the look and feel (cinematic, cartoon, selfie-cam)?
+- **Purpose / Action:** What is happening (monologue, announcement, commentary)?
+
+Your output should be a clear, structured summary of these components. This structured data will be used by other agents to enrich the idea and write the final prompts. If a component is missing, note that it needs to be defined.
+""",
+    tools=[],
 )
