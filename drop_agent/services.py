@@ -18,11 +18,11 @@ def get_runner():
         session_service = VertexAiSessionService()
         memory_service = InMemoryMemoryService()
 
-        from .agent import root_agent
+        from .agent import task_master_agent
 
         _runner = Runner(
             app_name=APP_NAME,
-            agent=root_agent,
+            agent=task_master_agent,
             session_service=session_service,
             memory_service=memory_service,
         )
