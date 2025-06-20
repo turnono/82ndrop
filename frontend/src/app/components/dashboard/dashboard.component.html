@@ -1,0 +1,50 @@
+<div class="dashboard-container">
+    <header class="dashboard-header">
+        <div class="header-content">
+            <h1>82ndrop Dashboard</h1>
+            <div class="user-info" *ngIf="user">
+                <div class="user-details">
+                    <img [src]="user.photoURL || '/assets/default-avatar.png'" [alt]="user.displayName || 'User'"
+                        class="user-avatar">
+                    <div class="user-text">
+                        <span class="user-name">{{ user.displayName || user.email }}</span>
+                        <span class="user-email" *ngIf="user.displayName">{{ user.email }}</span>
+                    </div>
+                </div>
+                <button class="btn btn-outline" (click)="onSignOut()">
+                    Sign Out
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="dashboard-main">
+        <div class="welcome-section">
+            <h2>Welcome to 82ndrop!</h2>
+            <p>Generate amazing video prompts with AI assistance.</p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🎬</div>
+                <h3>Video Prompts</h3>
+                <p>Generate creative video prompts for your content</p>
+                <button class="btn btn-primary">Coming Soon</button>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🚀</div>
+                <h3>AI Assistant</h3>
+                <p>Get help with creative ideas and concepts</p>
+                <button class="btn btn-primary">Coming Soon</button>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3>Analytics</h3>
+                <p>Track your content performance</p>
+                <button class="btn btn-primary">Coming Soon</button>
+            </div>
+        </div>
+    </main>
+</div>

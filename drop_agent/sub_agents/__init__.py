@@ -1,4 +1,4 @@
-"""Sub-agent package for 82ndDrop."""
+"""Sub-agent package for 82nDrop."""
 
 from .guide.agent import guide_agent
 from .search.agent import search_agent

@@ -1,3 +1,3 @@
-"""82ndDrop agent package."""
+"""82nDrop agent package."""
 
 from . import agent

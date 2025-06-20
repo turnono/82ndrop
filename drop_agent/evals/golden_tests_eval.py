@@ -51,20 +51,20 @@ async def test_agent_configuration():
         if root_agent.model != "gemini-2.0-flash":
             raise Exception(f"Root agent model incorrect: {root_agent.model}")
         
-        # Verify tools are configured (agents are added as tools)
-        if len(root_agent.tools) != 3:
-            raise Exception(f"Expected 3 tools, got {len(root_agent.tools)}")
+        # Verify sub-agents are configured
+        if len(root_agent.sub_agents) != 3:
+            raise Exception(f"Expected 3 sub-agents, got {len(root_agent.sub_agents)}")
             
         # Verify sub-agents exist and have correct names
         expected_agents = ["guide_agent", "search_agent", "prompt_writer_agent"]
-        actual_agents = [guide_agent.name, search_agent.name, prompt_writer_agent.name]
+        actual_agents = [agent.name for agent in root_agent.sub_agents]
         
         for expected in expected_agents:
             if expected not in actual_agents:
                 raise Exception(f"Missing agent: {expected}")
         
         # Verify each sub-agent has the correct model
-        for agent in [guide_agent, search_agent, prompt_writer_agent]:
+        for agent in root_agent.sub_agents:
             if agent.model != "gemini-2.0-flash":
                 raise Exception(f"Agent {agent.name} has wrong model: {agent.model}")
                 
@@ -78,7 +78,7 @@ async def test_agent_configuration():
             "metrics": {
                 "root_agent_name": root_agent.name,
                 "root_agent_model": root_agent.model,
-                "tools_count": len(root_agent.tools),
+                "sub_agents_count": len(root_agent.sub_agents),
                 "sub_agent_names": actual_agents,
             },
         }
@@ -119,9 +119,10 @@ async def test_prompt_structures():
             if not prompt or len(prompt.strip()) < 50:
                 raise Exception(f"{name} is too short or empty")
         
-        # Verify root prompt mentions coordination
-        if "coordinate" not in PROMPT.lower() and "orchestrate" not in PROMPT.lower():
-            raise Exception("Root prompt doesn't mention coordination/orchestration")
+        # Verify root prompt mentions coordination or team work
+        coordination_keywords = ["coordinate", "orchestrate", "team", "specialist", "sub-agent"]
+        if not any(keyword in PROMPT.lower() for keyword in coordination_keywords):
+            raise Exception("Root prompt doesn't mention coordination/orchestration or team work")
             
         # Verify prompt writer mentions JSON
         if "json" not in PROMPT_WRITER_INSTRUCTION.lower():

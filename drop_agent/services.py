@@ -5,7 +5,7 @@ from google.adk.runners import Runner
 
 PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
-APP_NAME = "82nddrop_app"
+APP_NAME = "82ndrop_app"
 
 _runner = None
 

@@ -1,0 +1,18 @@
+{
+  "projects": {
+    "default": "taajirah"
+  },
+  "targets": {
+    "taajirah": {
+      "hosting": {
+        "taajirah-main": [
+          "taajirah"
+        ],
+        "82ndrop": [
+          "82ndrop"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
