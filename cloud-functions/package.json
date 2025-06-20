@@ -1,0 +1,20 @@
+{
+  "name": "82ndrop-cloud-functions",
+  "version": "1.0.0",
+  "description": "Cloud functions for 82ndrop user management",
+  "main": "set-user-claims.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^5.0.0"
+  },
+  "keywords": [
+    "firebase",
+    "cloud-functions",
+    "82ndrop"
+  ],
+  "author": "",
+  "license": "ISC"
+}

@@ -20,6 +20,9 @@ dateparser==1.2.1
 cloudpickle==3.1.1
 litellm==1.70.0
 
-# FastAPI and web dependencies (if not already included via google-adk)
-fastapi==0.104.0
-uvicorn[standard]==0.24.0
+# FastAPI and web dependencies (compatible with google-adk)
+fastapi>=0.115.0
+uvicorn[standard]>=0.24.0
+
+# Firebase Admin SDK for authentication
+firebase-admin==6.4.0

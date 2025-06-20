@@ -61,11 +61,13 @@ export class LoginComponent implements OnInit, OnDestroy {
 
         if (this.isSignUpMode) {
           await this.authService.signUpWithEmail(email, password);
+          // For new users, wait a moment then check if they need access granted
+          await this.handleNewUserAccess();
         } else {
           await this.authService.signInWithEmail(email, password);
+          // For existing users, check their access status
+          await this.handleExistingUserAccess();
         }
-
-        this.router.navigate(['/dashboard']);
       } catch (error: any) {
         this.errorMessage = this.getErrorMessage(error);
       } finally {
@@ -76,13 +78,48 @@ export class LoginComponent implements OnInit, OnDestroy {
     }
   }
 
+  private async handleNewUserAccess() {
+    try {
+      // Wait a moment for the user to be fully created
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Refresh token to get any auto-granted claims
+      await this.authService.refreshUserToken();
+
+      // Check if user has access, if not redirect to pending page
+      if (this.authService.hasAgentAccess()) {
+        this.router.navigate(['/dashboard']);
+      } else {
+        this.router.navigate(['/access-pending']);
+      }
+    } catch (error) {
+      console.error('Error handling new user access:', error);
+      this.router.navigate(['/access-pending']);
+    }
+  }
+
+  private async handleExistingUserAccess() {
+    try {
+      // Check if user has access
+      if (this.authService.hasAgentAccess()) {
+        this.router.navigate(['/dashboard']);
+      } else {
+        this.router.navigate(['/access-pending']);
+      }
+    } catch (error) {
+      console.error('Error checking user access:', error);
+      this.router.navigate(['/access-pending']);
+    }
+  }
+
   async onGoogleLogin() {
     this.isLoading = true;
     this.errorMessage = '';
 
     try {
       await this.authService.signInWithGoogle();
-      this.router.navigate(['/dashboard']);
+      // Handle Google login access check
+      await this.handleExistingUserAccess();
     } catch (error: any) {
       this.errorMessage = this.getErrorMessage(error);
     } finally {

@@ -1,17 +1,17 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { AuthService } from '../../services/auth.service';
-import { User } from '@angular/fire/auth';
+import { RouterModule } from '@angular/router';
+import { AuthService, AuthUser } from '../../services/auth.service';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterModule],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss'],
 })
 export class DashboardComponent implements OnInit {
-  user: User | null = null;
+  user: AuthUser | null = null;
 
   constructor(private authService: AuthService) {}
 

@@ -13,9 +13,14 @@ export class AuthGuard implements CanActivate {
     return this.authService.getUser().pipe(
       take(1),
       map((user) => {
-        if (user) {
+        if (user && user.hasAgentAccess) {
           return true;
+        } else if (user && !user.hasAgentAccess) {
+          // User is authenticated but doesn't have agent access
+          this.router.navigate(['/access-pending']);
+          return false;
         } else {
+          // User is not authenticated
           this.router.navigate(['/login']);
           return false;
         }

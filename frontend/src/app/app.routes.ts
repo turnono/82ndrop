@@ -25,6 +25,21 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'analytics',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+      import('./components/analytics/analytics.component').then(
+        (m) => m.AnalyticsComponent
+      ),
+  },
+  {
+    path: 'access-pending',
+    loadComponent: () =>
+      import('./components/access-pending/access-pending.component').then(
+        (m) => m.AccessPendingComponent
+      ),
+  },
+  {
     path: '**',
     redirectTo: '',
   },
