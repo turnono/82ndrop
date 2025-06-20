@@ -51,8 +51,8 @@ def before_agent_callback(callback_context: CallbackContext) -> Optional[types.C
     except Exception as e:
         logger.error(f"Error in before_agent_callback: {e}")
 
-    # DO NOT modify state in before_agent_callback!
-    # State modifications should happen in after_agent_callback or through tools
+    # Note: We do set processing_start_time here for performance tracking
+    # This is a minimal state modification for monitoring purposes
     return None
 
 
