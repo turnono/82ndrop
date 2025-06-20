@@ -1,0 +1,28 @@
+# Core Google ADK and AI Platform dependencies
+google-adk==1.4.1
+google-cloud-aiplatform[reasoningengine,adk,agent_engines]==1.95.1
+vertexai==1.43.0
+google-generativeai==0.8.5
+
+# Google Cloud services
+google-cloud-firestore==2.20.2
+google-cloud-storage==2.19.0
+google-cloud-core==2.4.3
+
+# Core application dependencies
+pydantic==2.11.4
+pydantic-settings==2.9.1
+python-dotenv==1.1.0
+sqlalchemy==2.0.36
+
+# Utility libraries
+dateparser==1.2.1
+cloudpickle==3.1.1
+litellm==1.70.0
+
+# FastAPI and web dependencies (compatible with google-adk)
+fastapi>=0.115.0
+uvicorn[standard]>=0.24.0
+
+# Firebase Admin SDK for authentication
+firebase-admin==6.4.0

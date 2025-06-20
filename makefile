@@ -32,5 +32,17 @@ deploy-include-vertex-session-storage:
 	./drop_agent
 
 
+deploy-api:
+	@echo "[Deploy Custom API] Deploying FastAPI backend..."
+	gcloud run deploy drop-api-service \
+		--source . \
+		--platform managed \
+		--region us-central1 \
+		--project ${GOOGLE_CLOUD_PROJECT} \
+		--allow-unauthenticated \
+		--port 8080 \
+		--memory 2Gi \
+		--cpu 2
+
 deploy-frontend:
 	cd frontend && ng build --configuration=production && firebase deploy --only hosting:82ndrop --project=${GOOGLE_CLOUD_PROJECT}

@@ -29,8 +29,8 @@ import { Router } from '@angular/router';
         <h1>Access Pending</h1>
 
         <p class="message">
-          Your account has been created successfully! However, you need approval
-          to access the 82ndrop agent system.
+          Your account has been created successfully! Click "Request Access"
+          below to activate your 82ndrop agent system access.
         </p>
 
         <div class="user-info" *ngIf="user">
@@ -41,9 +41,9 @@ import { Router } from '@angular/router';
         <div class="instructions">
           <h3>What's Next?</h3>
           <ol>
-            <li>Your account is being reviewed for agent access</li>
-            <li>You'll receive an email once approved</li>
-            <li>Contact support if you need immediate access</li>
+            <li>Click "Request Access" to automatically grant agent access</li>
+            <li>Access is typically granted immediately</li>
+            <li>Contact support if you encounter any issues</li>
           </ol>
         </div>
 

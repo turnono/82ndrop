@@ -55,8 +55,12 @@ app.add_middleware(
         "http://localhost:4200",  # Angular dev server
         "https://82ndrop.web.app",  # Firebase hosting
         "https://82ndrop.firebaseapp.com",
+        "https://www.82ndrop.web.app",
         "https://taajirah.web.app",
-        "https://taajirah.firebaseapp.com"
+        "https://taajirah.firebaseapp.com",
+        "https://www.taajirah.web.app",
+        "https://www.taajirah.firebaseapp.com",
+        "https://drop-agent-service-855515190257.us-central1.run.app"  # Backend service URL (for health checks)
     ],
     allow_credentials=True,
     allow_methods=["*"],

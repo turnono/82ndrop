@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, BehaviorSubject, throwError } from 'rxjs';
 import { catchError, switchMap } from 'rxjs/operators';
 import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment';
 
 export interface ChatMessage {
   message: string;
@@ -29,7 +30,7 @@ export interface UserProfile {
   providedIn: 'root',
 })
 export class AgentService {
-  private apiUrl = 'http://127.0.0.1:8000'; // Update for production
+  private apiUrl = environment.apiUrl || 'http://127.0.0.1:8000'; // Use environment config
   private currentSessionId: string | null = null;
 
   // Observable for chat messages
