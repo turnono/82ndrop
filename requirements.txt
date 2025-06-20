@@ -1,0 +1,4 @@
+# Core dependencies for 82ndDrop agents
+google-cloud-aiplatform
+google-adk
+python-dotenv
