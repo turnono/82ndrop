@@ -7,6 +7,14 @@ from .sub_agents import (
     search_agent,
     prompt_writer_agent,
 )
+from .callbacks import (
+    before_agent_callback,
+    after_agent_callback,
+    before_model_callback,
+    after_model_callback,
+    before_tool_callback,
+    after_tool_callback,
+)
 
 root_agent = Agent(
     name="task_master_agent",
@@ -17,4 +25,11 @@ root_agent = Agent(
         AgentTool(agent=search_agent),
         AgentTool(agent=prompt_writer_agent),
     ],
+    output_key="video_script_response",
+    before_agent_callback=before_agent_callback,
+    after_agent_callback=after_agent_callback,
+    before_model_callback=before_model_callback,
+    after_model_callback=after_model_callback,
+    before_tool_callback=before_tool_callback,
+    after_tool_callback=after_tool_callback,
 )
