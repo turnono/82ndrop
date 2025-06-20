@@ -1,10 +1,10 @@
-# 82ndDrop
+# 82nDrop
 
 **Create stunning, fast, AI-powered videos — in just a few seconds.**
 
 ## Overview
 
-82ndDrop is an AI-powered service that helps creators rapidly generate 8-second TikTok-style videos using guided prompts. Users describe what they want to make, and our multi-agent system returns 3 crafted prompts — one for the center video (main content), one for the top (context or teaser), and one for the bottom (text reenactment or subtitle style). These prompts can be used directly in tools like Gemini, Sora, or any video editor. This MVP phase focuses on delivering the prompts only — full video generation and stitching will come in a later version.
+82nDrop is an AI-powered service that helps creators rapidly generate 8-second TikTok-style videos using guided prompts. Users describe what they want to make, and our multi-agent system returns 3 crafted prompts — one for the center video (main content), one for the top (context or teaser), and one for the bottom (text reenactment or subtitle style). These prompts can be used directly in tools like Gemini, Sora, or any video editor. This MVP phase focuses on delivering the prompts only — full video generation and stitching will come in a later version.
 
 In the MVP phase, there is no use of memory or persistent storage for agent interactions. All processing is stateless and happens per request, with the results returned in a simple JSON format containing top, center, and bottom prompts. Memory handling and session continuity may be introduced in future versions.
 

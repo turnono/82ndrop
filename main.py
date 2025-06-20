@@ -6,7 +6,7 @@ from drop_agent.services import get_runner
 
 
 def main():
-    """Simple REPL to interact with the 82ndDrop agent system."""
+    """Simple REPL to interact with the 82nDrop agent system."""
     load_dotenv()
     runner = get_runner()
     user_id = "test-user"
