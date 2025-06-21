@@ -56,3 +56,4 @@ evals/callback_eval_report_*.json
 evals/*.json
 cloud-functions/node_modules/
 api/logs/
+logs/

@@ -3,16 +3,81 @@ FastAPI Middleware for automatic logging and analytics tracking
 """
 
 import time
-from typing import Callable
-from fastapi import Request, Response
+from typing import Callable, Dict, Any, Optional
+from fastapi import Request, Response, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.base import BaseHTTPMiddleware
+from pydantic import BaseModel
+
+# Firebase imports
+import firebase_admin
+from firebase_admin import auth
 
 try:
     from .logging_config import api_logger, analytics_tracker, UserAnalytics
 except ImportError:
     from logging_config import api_logger, analytics_tracker, UserAnalytics
 
+# Security
+security = HTTPBearer()
+
+# Pydantic models for user info
+class UserInfo(BaseModel):
+    uid: str
+    email: Optional[str]
+    display_name: Optional[str]
+    agent_access: bool
+    access_level: str
+    permissions: Dict[str, Any]
+
+# Authentication dependency
+async def firebase_auth_dependency(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+    """
+    Verify Firebase ID token and extract user information
+    """
+    try:
+        # Verify the ID token
+        decoded_token = auth.verify_id_token(credentials.credentials)
+        uid = decoded_token['uid']
+        
+        # Get user record to access custom claims
+        user_record = auth.get_user(uid)
+        custom_claims = user_record.custom_claims or {}
+        
+        # Check if user has agent access
+        if not custom_claims.get('agent_access', False):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User does not have access to the agent system"
+            )
+        
+        user_data = {
+            "uid": uid,
+            "email": decoded_token.get('email'),
+            "display_name": decoded_token.get('name'),
+            "agent_access": custom_claims.get('agent_access', False),
+            "access_level": custom_claims.get('access_level', 'basic'),
+            "permissions": custom_claims.get('agent_permissions', {})
+        }
+        
+        # Store user info in request state for middleware access
+        user_info = UserInfo(**user_data)
+        request.state.current_user = user_info
+        
+        return user_data
+        
+    except auth.InvalidIdTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token"
+        )
+    except Exception as e:
+        api_logger.log_error(f"Authentication error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed"
+        )
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     """Middleware to log all API requests and track analytics"""

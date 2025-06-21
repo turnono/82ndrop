@@ -17,6 +17,30 @@ export interface ChatResponse {
   timestamp: string;
 }
 
+// ADK-specific interfaces
+export interface AgentRunRequest {
+  app_name: string;
+  user_id: string;
+  session_id: string;
+  new_message: string;
+}
+
+export interface AgentEvent {
+  id: string;
+  author: string;
+  content: string;
+  timestamp: string;
+  type: string;
+}
+
+export interface Session {
+  id: string;
+  app_name: string;
+  user_id: string;
+  state?: any;
+  events?: AgentEvent[];
+}
+
 export interface UserProfile {
   uid: string;
   email?: string;
@@ -32,6 +56,7 @@ export interface UserProfile {
 export class AgentService {
   private apiUrl = environment.apiUrl || 'http://127.0.0.1:8000'; // Use environment config
   private currentSessionId: string | null = null;
+  private appName = 'drop_agent'; // Default app name
 
   // Observable for chat messages
   private messagesSubject = new BehaviorSubject<any[]>([]);
@@ -81,29 +106,83 @@ export class AgentService {
   }
 
   /**
-   * Send a message to the 82ndrop agent
+   * Create a new session using ADK endpoints
+   */
+  private async createSession(): Promise<Session> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const user = this.authService.getCurrentUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const userId = user.uid;
+      const response = await this.http
+        .post<Session>(
+          `${this.apiUrl}/apps/${this.appName}/users/${userId}/sessions`,
+          {},
+          { headers }
+        )
+        .toPromise();
+
+      if (!response) {
+        throw new Error('Failed to create session');
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Error creating session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send a message to the 82ndrop agent using ADK endpoints
    */
   async sendMessage(message: string): Promise<ChatResponse> {
     try {
       const headers = await this.getAuthHeaders();
+      const user = this.authService.getCurrentUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
 
-      const chatMessage: ChatMessage = {
-        message,
-        session_id: this.currentSessionId || undefined,
+      // Create session if we don't have one
+      if (!this.currentSessionId) {
+        const session = await this.createSession();
+        this.currentSessionId = session.id;
+      }
+
+      const runRequest: AgentRunRequest = {
+        app_name: this.appName,
+        user_id: user.uid,
+        session_id: this.currentSessionId,
+        new_message: message,
       };
 
-      const response = await this.http
-        .post<ChatResponse>(`${this.apiUrl}/chat`, chatMessage, { headers })
+      const events = await this.http
+        .post<AgentEvent[]>(`${this.apiUrl}/run`, runRequest, { headers })
         .toPromise();
 
-      if (!response) {
-        throw new Error('No response received from server');
+      if (!events || events.length === 0) {
+        throw new Error('No response received from agent');
       }
 
-      // Update session ID for future messages
-      if (response.session_id) {
-        this.currentSessionId = response.session_id;
+      // Find the agent's response from the events
+      const agentResponse = events.find(
+        (event) => event.author !== 'user' && event.content
+      );
+      if (!agentResponse) {
+        throw new Error('No agent response found in events');
       }
+
+      // Create a ChatResponse for backward compatibility
+      const response: ChatResponse = {
+        response: agentResponse.content,
+        session_id: this.currentSessionId,
+        user_id: user.uid,
+        timestamp: agentResponse.timestamp || new Date().toISOString(),
+      };
 
       // Add to messages stream
       const currentMessages = this.messagesSubject.value;
@@ -141,12 +220,24 @@ export class AgentService {
   }
 
   /**
-   * Get user's chat sessions
+   * Get user's chat sessions using ADK endpoints
    */
-  async getSessions(): Promise<any> {
+  async getSessions(): Promise<Session[]> {
     try {
       const headers = await this.getAuthHeaders();
-      return this.http.get(`${this.apiUrl}/sessions`, { headers }).toPromise();
+      const user = this.authService.getCurrentUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const response = await this.http
+        .get<Session[]>(
+          `${this.apiUrl}/apps/${this.appName}/users/${user.uid}/sessions`,
+          { headers }
+        )
+        .toPromise();
+
+      return response || [];
     } catch (error) {
       console.error('Error fetching sessions:', error);
       throw error;
@@ -154,13 +245,21 @@ export class AgentService {
   }
 
   /**
-   * Delete a chat session
+   * Delete a chat session using ADK endpoints
    */
   async deleteSession(sessionId: string): Promise<any> {
     try {
       const headers = await this.getAuthHeaders();
+      const user = this.authService.getCurrentUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
       return this.http
-        .delete(`${this.apiUrl}/sessions/${sessionId}`, { headers })
+        .delete(
+          `${this.apiUrl}/apps/${this.appName}/users/${user.uid}/sessions/${sessionId}`,
+          { headers }
+        )
         .toPromise();
     } catch (error) {
       console.error('Error deleting session:', error);
@@ -176,6 +275,23 @@ export class AgentService {
       return this.http.get(`${this.apiUrl}/health`).toPromise();
     } catch (error) {
       console.error('Error checking API health:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * List available apps using ADK endpoints
+   */
+  async listApps(): Promise<string[]> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const response = await this.http
+        .get<string[]>(`${this.apiUrl}/list-apps`, { headers })
+        .toPromise();
+
+      return response || [];
+    } catch (error) {
+      console.error('Error listing apps:', error);
       throw error;
     }
   }

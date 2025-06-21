@@ -1,351 +1,157 @@
 import os
-import asyncio
-import logging
 import time
-from typing import Optional, Dict, Any
-from datetime import datetime
-
-from fastapi import FastAPI, HTTPException, Depends, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import uvicorn
+from google.adk.cli.fast_api import get_fast_api_app
+from fastapi import Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
+# Initialize Firebase Admin SDK
 import firebase_admin
-from firebase_admin import credentials, auth
-from dotenv import load_dotenv
+from firebase_admin import credentials
 
-# Import logging and middleware
-try:
-    from .logging_config import api_logger, analytics_tracker, UserAnalytics
-    from .middleware import LoggingMiddleware
-except ImportError:
-    from logging_config import api_logger, analytics_tracker, UserAnalytics
-    from middleware import LoggingMiddleware
-
-# Load environment
-load_dotenv()
-
-# Initialize Firebase Admin
+# Initialize Firebase (only if not already initialized)
 if not firebase_admin._apps:
-    # Use default credentials (service account key should be in environment)
-    cred = credentials.ApplicationDefault()
-    firebase_admin.initialize_app(cred)
+    # Use the service account key file
+    cred_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', './taajirah-agents-service-account.json')
+    if os.path.exists(cred_path):
+        cred = credentials.Certificate(cred_path)
+        firebase_admin.initialize_app(cred)
+    else:
+        # For Cloud Run, use default credentials
+        firebase_admin.initialize_app()
 
-# Import 82ndrop agent
-from drop_agent.services import get_runner
+# Import our custom modules
+try:
+    from .logging_config import APILogger, AnalyticsTracker
+    from .middleware import firebase_auth_dependency
+except ImportError:
+    from logging_config import APILogger, AnalyticsTracker
+    from middleware import firebase_auth_dependency
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Get the directory where main.py is located
+AGENT_DIR = "./drop_agent"  # In Docker container, drop_agent is copied to /app/drop_agent
+# Session DB URL (using SQLite for now)
+SESSION_DB_URL = "sqlite:///./sessions.db"
+# CORS origins
+ALLOWED_ORIGINS = [
+    "https://82ndrop.web.app",
+    "https://82ndrop.firebaseapp.com", 
+    "http://localhost:4200",
+    "http://localhost:8080",
+    "*"
+]
 
-# FastAPI app
-app = FastAPI(
-    title="82ndrop Agent API",
-    description="API for accessing the 82ndrop video prompt agent system",
-    version="1.0.0"
+# Initialize our custom logging and analytics
+api_logger = APILogger()
+analytics_tracker = AnalyticsTracker()
+
+# Create the ADK FastAPI app
+app = get_fast_api_app(
+    agents_dir=AGENT_DIR,
+    session_service_uri=SESSION_DB_URL,
+    allow_origins=ALLOWED_ORIGINS,
+    web=True,  # Enables the built-in dev UI at /dev-ui/
 )
 
-# Add logging middleware first
-app.add_middleware(LoggingMiddleware)
-
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:4200",  # Angular dev server
-        "https://82ndrop.web.app",  # Firebase hosting
-        "https://82ndrop.firebaseapp.com",
-        "https://www.82ndrop.web.app",
-        "https://taajirah.web.app",
-        "https://taajirah.firebaseapp.com",
-        "https://www.taajirah.web.app",
-        "https://www.taajirah.firebaseapp.com",
-        "https://drop-agent-service-855515190257.us-central1.run.app"  # Backend service URL (for health checks)
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Security
-security = HTTPBearer()
-
-# Pydantic models
-class ChatMessage(BaseModel):
-    message: str
-    session_id: Optional[str] = None
-
-class ChatResponse(BaseModel):
-    response: str
-    session_id: str
-    user_id: str
-    timestamp: str
-
-class UserInfo(BaseModel):
-    uid: str
-    email: Optional[str]
-    display_name: Optional[str]
-    agent_access: bool
-    access_level: str
-    permissions: Dict[str, Any]
-
-# Authentication dependency
-async def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)) -> UserInfo:
-    """
-    Verify Firebase ID token and extract user information
-    """
+# Add our custom analytics endpoints
+@app.get("/analytics/overview")
+async def get_analytics_overview(user_data=Depends(firebase_auth_dependency)):
+    """Get analytics overview for authenticated user"""
     try:
-        # Verify the ID token
-        decoded_token = auth.verify_id_token(credentials.credentials)
-        uid = decoded_token['uid']
+        user_id = user_data["uid"]
+        user_email = user_data.get("email", "unknown")
         
-        # Get user record to access custom claims
-        user_record = auth.get_user(uid)
-        custom_claims = user_record.custom_claims or {}
+        # Get user-specific analytics
+        stats = analytics_tracker.get_user_analytics(user_id)
         
-        # Check if user has agent access
-        if not custom_claims.get('agent_access', False):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User does not have access to the agent system"
-            )
-        
-        user_info = UserInfo(
-            uid=uid,
-            email=decoded_token.get('email'),
-            display_name=decoded_token.get('name'),
-            agent_access=custom_claims.get('agent_access', False),
-            access_level=custom_claims.get('access_level', 'basic'),
-            permissions=custom_claims.get('agent_permissions', {})
-        )
-        
-        # Store user info in request state for middleware access
-        request.state.current_user = user_info
-        
-        return user_info
-        
-    except auth.InvalidIdTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token"
-        )
-    except Exception as e:
-        logger.error(f"Authentication error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication failed"
-        )
-
-# Initialize agent runner
-runner = get_runner()
-
-# API Routes
-@app.get("/")
-async def root():
-    return {"message": "82ndrop Agent API", "status": "active"}
-
-@app.get("/user/profile")
-async def get_user_profile(current_user: UserInfo = Depends(get_current_user)):
-    """Get current user profile and permissions"""
-    return current_user
-
-@app.post("/chat", response_model=ChatResponse)
-async def chat_with_agent(
-    request: Request,
-    chat_message: ChatMessage,
-    current_user: UserInfo = Depends(get_current_user)
-):
-    """
-    Send a message to the 82ndrop agent system
-    """
-    start_time = time.time()
-    
-    try:
-        user_id = current_user.uid
-        session_id = chat_message.session_id
-        
-        # If no session_id provided, create a new session
-        if not session_id:
-            session = await runner.session_service.create_session(
-                user_id=user_id, 
-                app_name=runner.app_name
-            )
-            session_id = session.id
-        
-        # Run the agent
-        final_response = None
-        for response in runner.run(
+        api_logger.log_api_usage(
             user_id=user_id,
-            session_id=session_id,
-            new_message=chat_message.message,
-        ):
-            final_response = response
-        
-        if not final_response or not final_response.content:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Agent failed to generate a response"
-            )
-        
-        # Create response
-        chat_response = ChatResponse(
-            response=final_response.content,
-            session_id=session_id,
-            user_id=user_id,
-            timestamp=datetime.now().isoformat()
-        )
-        
-        # Log detailed chat interaction
-        response_time_ms = (time.time() - start_time) * 1000
-        user_analytics = UserAnalytics(
-            user_id=user_id,
-            email=current_user.email,
-            access_level=current_user.access_level,
-            endpoint="/chat",
-            method="POST",
+            user_email=user_email,
+            endpoint="/analytics/overview",
+            method="GET",
             status_code=200,
-            response_time_ms=response_time_ms,
-            message_length=len(chat_message.message),
-            agent_response_length=len(final_response.content),
-            session_id=session_id
+            response_time=0.1
         )
         
-        # Log the chat interaction
-        api_logger.log_chat_interaction(user_analytics, chat_message.message, final_response.content)
-        analytics_tracker.track_usage(user_analytics)
-        
-        return chat_response
-        
-    except Exception as e:
-        # Log error with detailed context
-        response_time_ms = (time.time() - start_time) * 1000
-        api_logger.log_error(e, current_user.uid, {
-            "endpoint": "/chat",
-            "message_length": len(chat_message.message) if chat_message else 0,
-            "session_id": chat_message.session_id if chat_message else None,
-            "response_time_ms": response_time_ms
-        })
-        
-        logger.error(f"Chat error for user {current_user.uid}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process chat message: {str(e)}"
-        )
-
-@app.get("/sessions")
-async def get_user_sessions(current_user: UserInfo = Depends(get_current_user)):
-    """Get user's chat sessions"""
-    try:
-        # This would depend on your session service implementation
-        # For now, return a placeholder
         return {
-            "user_id": current_user.uid,
-            "sessions": [],
-            "message": "Session history not implemented yet"
+            "user_id": user_id,
+            "total_requests": stats.get("total_requests", 0),
+            "success_rate": stats.get("success_rate", 0.0),
+            "avg_response_time": stats.get("avg_response_time", 0.0),
+            "last_active": stats.get("last_active"),
+            "total_message_length": stats.get("total_message_length", 0)
         }
     except Exception as e:
-        logger.error(f"Error fetching sessions for user {current_user.uid}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch sessions"
-        )
+        api_logger.log_error(f"Analytics overview error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.delete("/sessions/{session_id}")
-async def delete_session(
-    session_id: str,
-    current_user: UserInfo = Depends(get_current_user)
-):
-    """Delete a user's chat session"""
-    try:
-        # Implement session deletion logic here
-        return {
-            "message": f"Session {session_id} deleted",
-            "user_id": current_user.uid
-        }
-    except Exception as e:
-        logger.error(f"Error deleting session {session_id} for user {current_user.uid}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete session"
-        )
-
-# Health check
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "agent_status": "ready"
-    }
-
-# Analytics endpoints
 @app.get("/analytics/daily")
-async def get_daily_analytics(
-    date: Optional[str] = None,
-    current_user: UserInfo = Depends(get_current_user)
-):
-    """Get daily analytics summary (admin only)"""
+async def get_daily_analytics(user_data=Depends(firebase_auth_dependency)):
+    """Get daily system analytics (admin only)"""
+    access_level = user_data.get("access_level", "basic")
     
-    # Check admin permissions
-    if current_user.access_level != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
+    if access_level != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        daily_stats = analytics_tracker.get_daily_stats()
+        
+        api_logger.log_api_usage(
+            user_id=user_data["uid"],
+            user_email=user_data.get("email", "unknown"),
+            endpoint="/analytics/daily",
+            method="GET",
+            status_code=200,
+            response_time=0.1
         )
-    
-    summary = analytics_tracker.get_daily_summary(date)
-    return {"daily_analytics": summary}
+        
+        return daily_stats
+    except Exception as e:
+        api_logger.log_error(f"Daily analytics error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/analytics/user/{user_id}")
-async def get_user_analytics(
-    user_id: str,
-    current_user: UserInfo = Depends(get_current_user)
-):
-    """Get user-specific analytics"""
+async def get_user_analytics(user_id: str, user_data=Depends(firebase_auth_dependency)):
+    """Get analytics for specific user (admin only)"""
+    access_level = user_data.get("access_level", "basic")
     
-    # Users can only view their own analytics, admins can view any
-    if current_user.uid != user_id and current_user.access_level != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Can only view your own analytics"
+    if access_level != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    try:
+        user_stats = analytics_tracker.get_user_analytics(user_id)
+        
+        api_logger.log_api_usage(
+            user_id=user_data["uid"],
+            user_email=user_data.get("email", "unknown"),
+            endpoint=f"/analytics/user/{user_id}",
+            method="GET",
+            status_code=200,
+            response_time=0.1
         )
-    
-    summary = analytics_tracker.get_user_summary(user_id)
-    return {"user_analytics": summary}
+        
+        return user_stats
+    except Exception as e:
+        api_logger.log_error(f"User analytics error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.get("/analytics/export")
-async def export_analytics(
-    current_user: UserInfo = Depends(get_current_user)
-):
-    """Export all analytics data (admin only)"""
-    
-    # Check admin permissions
-    if current_user.access_level != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
-        )
-    
-    filename = analytics_tracker.export_analytics()
-    return {"message": f"Analytics exported to {filename}", "filename": filename}
+@app.get("/health")
+async def health_check():
+    """Simple health check endpoint"""
+    try:
+        return {"status": "healthy", "service": "82ndrop-api-adk", "timestamp": str(time.time())}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
-@app.get("/analytics/overview")
-async def get_analytics_overview(
-    current_user: UserInfo = Depends(get_current_user)
-):
-    """Get analytics overview for current user"""
-    
-    user_summary = analytics_tracker.get_user_summary(current_user.uid)
-    
-    # If admin, also include daily summary
-    overview = {"user_stats": user_summary}
-    
-    if current_user.access_level == "admin":
-        daily_summary = analytics_tracker.get_daily_summary()
-        overview["daily_stats"] = daily_summary
-    
-    return {"analytics_overview": overview}
+# Add our logging middleware
+try:
+    from .middleware import LoggingMiddleware, ChatLoggingMiddleware
+except ImportError:
+    from middleware import LoggingMiddleware, ChatLoggingMiddleware
+
+app.add_middleware(LoggingMiddleware, api_logger=api_logger, analytics_tracker=analytics_tracker)
+app.add_middleware(ChatLoggingMiddleware, api_logger=api_logger, analytics_tracker=analytics_tracker)
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    # Use the PORT environment variable provided by Cloud Run, defaulting to 8080
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080))) 
