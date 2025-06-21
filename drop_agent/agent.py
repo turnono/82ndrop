@@ -22,8 +22,8 @@ import os
 firebase_auth_toolset = MCPToolset(
     connection_params=StdioServerParameters(
         command='python3',
-        args=[os.path.join(os.path.dirname(__file__), '..', 'firebase_auth_mcp_server.py')],
-        cwd=os.path.dirname(os.path.dirname(__file__)),  # Set working directory to project root
+        args=[os.path.join(os.path.dirname(__file__), 'firebase_auth_mcp_server.py')],
+        cwd=os.path.dirname(__file__),  # Set working directory to drop_agent folder
     ),
     tool_filter=['validate_request_auth', 'verify_firebase_token', 'check_user_access']
 )
