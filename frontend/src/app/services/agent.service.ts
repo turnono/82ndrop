@@ -166,28 +166,52 @@ export class AgentService {
         },
       };
 
-      const events = await this.http
-        .post<AgentEvent[]>(`${this.apiUrl}/run_sse`, runRequest, { headers })
+      // Use the /run endpoint instead of /run_sse for better compatibility
+      const response = await this.http
+        .post<any>(`${this.apiUrl}/run`, runRequest, { headers })
         .toPromise();
 
-      if (!events || events.length === 0) {
-        throw new Error('No response received from agent');
+      let agentContent = '';
+      let responseTimestamp = new Date().toISOString();
+
+      // Handle different response formats
+      if (Array.isArray(response)) {
+        // If response is an array of events (like from run_sse)
+        const agentResponse = response.find(
+          (event: any) => event.author !== 'user' && event.content
+        );
+        if (agentResponse) {
+          agentContent = agentResponse.content;
+          responseTimestamp = agentResponse.timestamp || responseTimestamp;
+        }
+      } else if (response && typeof response === 'object') {
+        // If response is a single object
+        if (response.content) {
+          agentContent = response.content;
+          responseTimestamp = response.timestamp || responseTimestamp;
+        } else if (response.response) {
+          agentContent = response.response;
+          responseTimestamp = response.timestamp || responseTimestamp;
+        } else if (response.message) {
+          agentContent = response.message;
+        } else {
+          // Fallback - stringify the response
+          agentContent = JSON.stringify(response);
+        }
+      } else if (typeof response === 'string') {
+        agentContent = response;
       }
 
-      // Find the agent's response from the events
-      const agentResponse = events.find(
-        (event) => event.author !== 'user' && event.content
-      );
-      if (!agentResponse) {
-        throw new Error('No agent response found in events');
+      if (!agentContent) {
+        throw new Error('No valid response received from agent');
       }
 
       // Create a ChatResponse for backward compatibility
-      const response: ChatResponse = {
-        response: agentResponse.content,
+      const chatResponse: ChatResponse = {
+        response: agentContent,
         session_id: this.currentSessionId,
         user_id: user.uid,
-        timestamp: agentResponse.timestamp || new Date().toISOString(),
+        timestamp: responseTimestamp,
       };
 
       // Add to messages stream
@@ -197,15 +221,21 @@ export class AgentService {
         { type: 'user', content: message, timestamp: new Date().toISOString() },
         {
           type: 'agent',
-          content: response.response,
-          timestamp: response.timestamp,
+          content: chatResponse.response,
+          timestamp: chatResponse.timestamp,
         },
       ];
       this.messagesSubject.next(newMessages);
 
-      return response;
+      return chatResponse;
     } catch (error) {
       console.error('Error sending message to agent:', error);
+      // If it's a parsing error, try to extract meaningful info
+      if (error instanceof Error && error.message.includes('parsing')) {
+        throw new Error(
+          'Failed to parse response from server. Please try again.'
+        );
+      }
       throw error;
     }
   }
