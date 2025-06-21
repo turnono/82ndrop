@@ -1,50 +1,34 @@
-import os
+#!/usr/bin/env python3
+"""
+82ndrop Authenticated Agent Main Entry Point
+
+This is the main entry point for the ADK deployment of the authenticated 82ndrop agent.
+It uses MCP (Model Context Protocol) for Firebase authentication.
+"""
+
 import asyncio
-from dotenv import load_dotenv
+import os
+from agent_with_mcp_auth import AuthenticatedDropAgent
 
-from drop_agent.services import get_runner
-
-
-def main():
-    """Simple REPL to interact with the 82nDrop agent system."""
-    load_dotenv()
-    runner = get_runner()
-    user_id = "test-user"
-
-    # Create an async function to initialize the session
-    async def _initialize_session():
-        # This function must be async to `await` the create_session call
-        session = await runner.session_service.create_session(
-            user_id=user_id, app_name=runner.app_name
-        )
-        return session.id
-
-    # Run the async function to get the session_id
-    session_id = asyncio.run(_initialize_session())
-
-    print("Agent is ready. Type 'exit' to quit.")
-    while True:
-        user_input = input("You: ")
-        if user_input.lower() == "exit":
-            break
-
-        # runner.run() is a generator, so we iterate to get the final response
-        final_response = None
-        for r in runner.run(
-            user_id=user_id,
-            session_id=session_id,
-            new_message=user_input,
-        ):
-            final_response = r
-
-        if final_response and final_response.content:
-            print(f"Agent: {final_response.content}")
-        else:
-            print("Agent: An error occurred or no response was generated.")
-
+async def main():
+    """Initialize and run the authenticated agent"""
+    # Set environment variables for Firebase
+    os.environ['FIREBASE_SERVICE_ACCOUNT_PATH'] = 'taajirah-agents-service-account.json'
+    
+    # Create and initialize the authenticated agent
+    agent = AuthenticatedDropAgent()
+    await agent.initialize()
+    
+    print("🎉 82ndrop Authenticated Agent is ready!")
+    print("🔐 Authentication: MCP-based Firebase authentication")
+    print("🚀 Agent: Ready to process authenticated requests")
+    
+    # Keep the agent running
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        print("\n👋 Shutting down authenticated agent...")
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\nExiting...")
+    asyncio.run(main()) 
