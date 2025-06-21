@@ -9,7 +9,8 @@ import logging
 from typing import Optional, Any, Dict, List
 from datetime import datetime
 import json
-from google.adk.core import CallbackContext, CallbackMetadata
+from google.adk.agents.callback_context import CallbackContext
+
 
 try:
     from google.adk.agents.callback_context import CallbackContext
@@ -173,8 +174,7 @@ def authenticate_request(callback_context: CallbackContext) -> Optional[Dict[str
 
 
 def before_agent_callback(
-    context: CallbackContext,
-    metadata: CallbackMetadata,
+    callback_context: CallbackContext
 ) -> None:
     """
     Before agent callback - handles authentication and CORS
@@ -183,8 +183,8 @@ def before_agent_callback(
         logger.info("🔐 Before agent callback triggered")
         
         # Add CORS headers to the response
-        if hasattr(context, 'response_headers'):
-            context.response_headers.update({
+        if hasattr(callback_context, 'response_headers'):
+            callback_context.response_headers.update({
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
@@ -192,8 +192,8 @@ def before_agent_callback(
             })
         
         # Store authentication info in context state
-        context.state["authenticated"] = True
-        context.state["user_info"] = {
+        callback_context.state["authenticated"] = True
+        callback_context.state["user_info"] = {
             "uid": "authenticated_user",
             "email": "user@example.com",
             "authenticated": True
@@ -202,14 +202,12 @@ def before_agent_callback(
         
     except Exception as e:
         logger.error(f"❌ Error in before_agent_callback: {str(e)}")
-        context.state["authenticated"] = False
-        context.state["error"] = str(e)
+        callback_context.state["authenticated"] = False
+        callback_context.state["error"] = str(e)
 
 
 def after_agent_callback(
-    context: CallbackContext,
-    metadata: CallbackMetadata,
-) -> None:
+    callback_context: CallbackContext) -> None:
     """
     After agent callback - adds final CORS headers
     """
@@ -217,8 +215,8 @@ def after_agent_callback(
         logger.info("📤 After agent callback triggered")
         
         # Ensure CORS headers are set on the response
-        if hasattr(context, 'response_headers'):
-            context.response_headers.update({
+        if hasattr(callback_context, 'response_headers'):
+            callback_context.response_headers.update({
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With'

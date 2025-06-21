@@ -22,7 +22,10 @@ export interface AgentRunRequest {
   app_name: string;
   user_id: string;
   session_id: string;
-  new_message: string;
+  new_message: {
+    role: string;
+    parts: { text: string }[];
+  };
 }
 
 export interface AgentEvent {
@@ -153,11 +156,14 @@ export class AgentService {
         this.currentSessionId = session.id;
       }
 
-      const runRequest: AgentRunRequest = {
+      const runRequest = {
         app_name: this.appName,
         user_id: user.uid,
         session_id: this.currentSessionId,
-        new_message: message,
+        new_message: {
+          role: 'user',
+          parts: [{ text: message }],
+        },
       };
 
       const events = await this.http
@@ -272,7 +278,8 @@ export class AgentService {
    */
   async checkHealth(): Promise<any> {
     try {
-      return this.http.get(`${this.apiUrl}/health`).toPromise();
+      // Use list-apps endpoint as a health check since /health doesn't exist in ADK
+      return this.http.get(`${this.apiUrl}/list-apps`).toPromise();
     } catch (error) {
       console.error('Error checking API health:', error);
       throw error;

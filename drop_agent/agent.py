@@ -18,10 +18,12 @@ from .callbacks import (
 )
 
 # Create Firebase Auth MCP toolset
+import os
 firebase_auth_toolset = MCPToolset(
     connection_params=StdioServerParameters(
         command='python3',
-        args=['firebase_auth_mcp_server.py'],
+        args=[os.path.join(os.path.dirname(__file__), '..', 'firebase_auth_mcp_server.py')],
+        cwd=os.path.dirname(os.path.dirname(__file__)),  # Set working directory to project root
     ),
     tool_filter=['validate_request_auth', 'verify_firebase_token', 'check_user_access']
 )

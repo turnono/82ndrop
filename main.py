@@ -14,7 +14,7 @@ ALLOWED_ORIGINS = [
     "https://taajirah.firebaseapp.com",  # Firebase hosting
     "*"  # Allow all origins for now (can be restricted later)
 ]
-# Set web=True to serve the ADK web interface
+# Set web=False to disable authentication for local testing
 SERVE_WEB_INTERFACE = True
 
 # Call the function to get the FastAPI app instance
@@ -33,5 +33,5 @@ app = get_fast_api_app(
 #     return {"Hello": "World"}
 
 if __name__ == "__main__":
-    # Use the PORT environment variable provided by Cloud Run, defaulting to 8080
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080))) 
+    # Use port 8000 to avoid conflict with Jenkins on 8080
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000))) 
