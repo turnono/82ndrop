@@ -19,10 +19,10 @@ export interface ChatResponse {
 
 // ADK-specific interfaces
 export interface AgentRunRequest {
-  app_name: string;
-  user_id: string;
-  session_id: string;
-  new_message: {
+  appName: string;
+  userId: string;
+  sessionId: string;
+  newMessage: {
     role: string;
     parts: { text: string }[];
   };
@@ -157,17 +157,17 @@ export class AgentService {
       }
 
       const runRequest = {
-        app_name: this.appName,
-        user_id: user.uid,
-        session_id: this.currentSessionId,
-        new_message: {
+        appName: this.appName,
+        userId: user.uid,
+        sessionId: this.currentSessionId,
+        newMessage: {
           role: 'user',
           parts: [{ text: message }],
         },
       };
 
       const events = await this.http
-        .post<AgentEvent[]>(`${this.apiUrl}/run`, runRequest, { headers })
+        .post<AgentEvent[]>(`${this.apiUrl}/run_sse`, runRequest, { headers })
         .toPromise();
 
       if (!events || events.length === 0) {
