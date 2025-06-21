@@ -191,14 +191,21 @@ def before_agent_callback(
                 'Access-Control-Max-Age': '86400'
             })
         
-        # Store authentication info in context state
-        callback_context.state["authenticated"] = True
-        callback_context.state["user_info"] = {
-            "uid": "authenticated_user",
-            "email": "user@example.com",
-            "authenticated": True
-        }
-        logger.info("✅ Authentication successful - user authenticated")
+        # Try to authenticate the request
+        try:
+            user_info = authenticate_request(callback_context)
+            if user_info:
+                callback_context.state["authenticated"] = True
+                callback_context.state["user_info"] = user_info
+                logger.info(f"✅ Authentication successful - user: {user_info.get('uid')}")
+            else:
+                callback_context.state["authenticated"] = False
+                callback_context.state["error"] = "Authentication failed"
+                logger.warning("❌ Authentication failed - no user info returned")
+        except Exception as auth_error:
+            logger.error(f"❌ Authentication error: {auth_error}")
+            callback_context.state["authenticated"] = False
+            callback_context.state["error"] = str(auth_error)
         
     except Exception as e:
         logger.error(f"❌ Error in before_agent_callback: {str(e)}")
