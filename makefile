@@ -32,13 +32,11 @@ deploy-gcloud:
 		--source . \
 		--region ${GOOGLE_CLOUD_LOCATION} \
 		--allow-unauthenticated \
-		--port 8000 \
 		--service-account ${GOOGLE_CLOUD_PROJECT}@appspot.gserviceaccount.com \
 		--set-env-vars="GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT},\
 GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION},\
 GOOGLE_GENAI_USE_VERTEXAI=${GOOGLE_GENAI_USE_VERTEXAI},\
 REASONING_ENGINE_ID=${REASONING_ENGINE_ID},\
-GOOGLE_API_KEY=${GOOGLE_API_KEY},\
 ENV=${ENV}"
 
 deploy-with-auth:
