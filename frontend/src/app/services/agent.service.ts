@@ -56,7 +56,7 @@ export interface UserProfile {
 export class AgentService {
   private apiUrl = environment.apiUrl || 'http://127.0.0.1:8000'; // Use environment config
   private currentSessionId: string | null = null;
-  private appName = 'drop_agent'; // Default app name
+  private appName = 'drop_agent'; // Updated app name
 
   // Observable for chat messages
   private messagesSubject = new BehaviorSubject<any[]>([]);

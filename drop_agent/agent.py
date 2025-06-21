@@ -33,7 +33,7 @@ prompt_writer_tool = AgentTool(prompt_writer_agent)
 
 # Create the authenticated root agent
 root_agent = Agent(
-    name="authenticated_drop_agent",
+    name="drop_agent",
     model="gemini-2.0-flash",
     instruction=f"""You are the 82ndrop video prompt assistant with authentication.
 

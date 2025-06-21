@@ -29,14 +29,14 @@
                 <div class="feature-icon">🎬</div>
                 <h3>Video Prompts</h3>
                 <p>Generate creative video prompts for your content</p>
-                <button class="btn btn-primary">Coming Soon</button>
+                <button class="btn btn-primary" (click)="showChat = true">Start Creating</button>
             </div>
 
             <div class="feature-card">
                 <div class="feature-icon">🚀</div>
                 <h3>AI Assistant</h3>
                 <p>Get help with creative ideas and concepts</p>
-                <button class="btn btn-primary">Coming Soon</button>
+                <button class="btn btn-primary" (click)="showChat = true">Chat Now</button>
             </div>
 
             <div class="feature-card">
@@ -45,6 +45,15 @@
                 <p>View your usage statistics and insights</p>
                 <button class="btn btn-primary" routerLink="/analytics">View Analytics</button>
             </div>
+        </div>
+
+        <!-- Chat Interface -->
+        <div class="chat-section" *ngIf="showChat">
+            <div class="section-header">
+                <h2>82ndrop AI Agent</h2>
+                <button class="btn btn-outline" (click)="showChat = false">Hide Chat</button>
+            </div>
+            <app-chat></app-chat>
         </div>
     </main>
 </div>
