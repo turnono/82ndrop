@@ -143,7 +143,7 @@ interface ChatMessage {
         border: 2px solid #e9ecef;
         border-radius: 20px;
         outline: none;
-        font-size: 14px;
+        font-size: 16px;
         resize: none;
         transition: border-color 0.2s;
       }
