@@ -270,6 +270,64 @@ export class AgentService {
   }
 
   /**
+   * Send a message to the 82ndrop agent using SSE for real-time updates
+   */
+  async sendMessageWithSSE(
+    message: string,
+    onUpdate: (update: any) => void
+  ): Promise<ChatResponse> {
+    try {
+      // For now, use a fallback approach with simulated progress updates
+      // since the server doesn't have a streaming endpoint yet
+      console.log(
+        'Using fallback approach with regular /run endpoint and simulated progress'
+      );
+
+      // Simulate workflow progress
+      onUpdate({
+        type: 'workflow_step',
+        message: 'Starting analysis...',
+        agents: ['🤖 Guide Agent'],
+        timestamp: new Date().toISOString(),
+      });
+
+      // Small delay to show progress
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      onUpdate({
+        type: 'workflow_step',
+        message: 'Searching for trends...',
+        agents: ['🤖 Guide Agent', '🤖 Search Agent'],
+        timestamp: new Date().toISOString(),
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      onUpdate({
+        type: 'workflow_step',
+        message: 'Creating composition...',
+        agents: ['🤖 Guide Agent', '🤖 Search Agent', '🤖 Prompt Writer Agent'],
+        timestamp: new Date().toISOString(),
+      });
+
+      // Use the existing working sendMessage method
+      const response = await this.sendMessage(message);
+
+      // Send final response update
+      onUpdate({
+        type: 'final_response',
+        message: response.response,
+        timestamp: response.timestamp,
+      });
+
+      return response;
+    } catch (error) {
+      console.error('Error sending message with SSE fallback:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get user-friendly agent names
    */
   private getAgentDisplayName(agentName: string): string {

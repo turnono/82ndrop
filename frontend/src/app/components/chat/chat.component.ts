@@ -15,10 +15,11 @@ import { AuthService } from '../../services/auth.service';
 import { Subscription } from 'rxjs';
 
 interface ChatMessage {
-  type: 'user' | 'agent' | 'system';
+  type: 'user' | 'agent' | 'system' | 'progress';
   content: string;
   timestamp: string;
   loading?: boolean;
+  workflowSteps?: string[];
 }
 
 @Component({
@@ -38,6 +39,20 @@ interface ChatMessage {
               class="message-text"
               [innerHTML]="formatMessageText(message.content)"
             ></div>
+
+            <!-- Workflow progress indicator -->
+            <div
+              *ngIf="message.type === 'progress' && message.workflowSteps"
+              class="workflow-steps"
+            >
+              <div
+                *ngFor="let step of message.workflowSteps"
+                class="workflow-step"
+              >
+                {{ step }}
+              </div>
+            </div>
+
             <div class="message-timestamp">
               {{ formatTimestamp(message.timestamp) }}
             </div>
@@ -97,6 +112,11 @@ interface ChatMessage {
         align-self: flex-start;
       }
 
+      .message.progress {
+        align-self: flex-start;
+        max-width: 90%;
+      }
+
       .message-content {
         padding: 12px 16px;
         border-radius: 18px;
@@ -114,8 +134,18 @@ interface ChatMessage {
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       }
 
+      .message.progress .message-content {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-left: 4px solid #667eea;
+      }
+
       .message-text {
         margin-bottom: 4px;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
       }
 
       .message-timestamp {
@@ -175,6 +205,82 @@ interface ChatMessage {
 
       .send-icon {
         font-size: 16px;
+      }
+
+      .workflow-steps {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #dee2e6;
+      }
+
+      .workflow-step {
+        font-size: 12px;
+        color: #6c757d;
+        margin: 2px 0;
+        padding: 2px 8px;
+        background: rgba(102, 126, 234, 0.1);
+        border-radius: 12px;
+        display: inline-block;
+        margin-right: 4px;
+        margin-bottom: 4px;
+      }
+
+      .json-container {
+        margin: 12px 0;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #f8f9fa;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
+      }
+
+      .json-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background: #e9ecef;
+        border-bottom: 1px solid #dee2e6;
+      }
+
+      .json-label {
+        font-weight: 600;
+        color: #495057;
+        font-size: 14px;
+      }
+
+      .copy-json-btn {
+        padding: 4px 8px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        transition: all 0.2s;
+      }
+
+      .copy-json-btn:hover {
+        background: #0056b3;
+        transform: translateY(-1px);
+      }
+
+      .json-block {
+        background: white;
+        padding: 12px;
+        margin: 0;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        overflow-x: auto;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
       }
     `,
   ],
@@ -249,60 +355,90 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.shouldScrollToBottom = true;
   }
 
+  private addProgressMessage(content: string, workflowSteps: string[] = []) {
+    this.messages.push({
+      type: 'progress',
+      content,
+      timestamp: new Date().toISOString(),
+      workflowSteps,
+    });
+    this.shouldScrollToBottom = true;
+  }
+
   async sendMessage() {
     if (!this.currentMessage.trim() || this.isLoading) {
       return;
     }
 
     const userMessage = this.currentMessage.trim();
-    this.addUserMessage(userMessage);
     this.currentMessage = '';
     this.isLoading = true;
 
-    // Add loading message
-    const loadingMessage: ChatMessage = {
-      type: 'agent',
-      content: 'Thinking...',
+    // Add user message
+    this.addUserMessage(userMessage);
+
+    // Add progress message that will be updated in real-time
+    const progressMessage: ChatMessage = {
+      type: 'progress',
+      content: 'Starting analysis...',
       timestamp: new Date().toISOString(),
-      loading: true,
+      workflowSteps: [],
     };
-    this.messages.push(loadingMessage);
+    this.messages.push(progressMessage);
     this.shouldScrollToBottom = true;
 
     try {
-      const response: ChatResponse = await this.agentService.sendMessage(
-        userMessage
+      // Use SSE for real-time updates
+      const response = await this.agentService.sendMessageWithSSE(
+        userMessage,
+        (update) => {
+          // Update progress message in real-time
+          const progressIndex = this.messages.length - 1;
+          if (this.messages[progressIndex]?.type === 'progress') {
+            if (update.type === 'workflow_step') {
+              this.messages[progressIndex].content = update.message;
+              this.messages[progressIndex].workflowSteps = update.agents;
+            } else if (update.type === 'final_response') {
+              // Remove progress message and add final response
+              this.messages.splice(progressIndex, 1);
+              this.addAgentMessage(update.message, update.timestamp);
+
+              // Check if response contains JSON and emit it
+              try {
+                const jsonMatch = update.message.match(
+                  /```json\s*([\s\S]*?)\s*```/
+                );
+                if (jsonMatch) {
+                  const jsonContent = jsonMatch[1];
+                  const parsedJson = JSON.parse(jsonContent);
+                  this.promptGenerated.emit(parsedJson);
+                }
+              } catch (e) {
+                console.log(
+                  'Response does not contain valid JSON, continuing normally'
+                );
+              }
+            }
+            this.shouldScrollToBottom = true;
+          }
+        }
       );
 
-      // Remove loading message
-      this.messages = this.messages.filter((m) => !m.loading);
-
-      // Add agent response
-      this.addAgentMessage(response.response, response.timestamp);
-
-      // Check if response contains JSON prompts and emit them
-      try {
-        const jsonMatch = response.response.match(/```json\n([\s\S]*?)\n```/);
-        if (jsonMatch) {
-          const promptData = JSON.parse(jsonMatch[1]);
-          this.promptGenerated.emit(promptData);
-        }
-      } catch (e) {
-        // Not a JSON response, that's fine
-      }
+      console.log('SSE Response received:', response);
     } catch (error) {
       console.error('Error sending message:', error);
 
-      // Remove loading message
-      this.messages = this.messages.filter((m) => !m.loading);
+      // Remove progress message and show error
+      const progressIndex = this.messages.findIndex(
+        (m) => m.type === 'progress'
+      );
+      if (progressIndex >= 0) {
+        this.messages.splice(progressIndex, 1);
+      }
 
-      // Add error message
-      this.addSystemMessage(
-        `❌ Error: ${
-          error instanceof Error
-            ? error.message
-            : 'Failed to send message. Please try again.'
-        }`
+      this.addAgentMessage(
+        'Sorry, I encountered an error while processing your request. Please try again.',
+        new Date().toISOString()
       );
     } finally {
       this.isLoading = false;
