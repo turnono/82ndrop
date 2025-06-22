@@ -9,6 +9,7 @@ import {
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { Subscription } from 'rxjs';
+import { AccessService } from '../../services/access.service';
 
 @Component({
   selector: 'app-login',
@@ -27,7 +28,8 @@ export class LoginComponent implements OnInit, OnDestroy {
   constructor(
     private fb: FormBuilder,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private accessService: AccessService
   ) {
     this.loginForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
@@ -83,17 +85,25 @@ export class LoginComponent implements OnInit, OnDestroy {
       // Wait a moment for the user to be fully created
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      // Refresh token to get any auto-granted claims
-      await this.authService.refreshUserToken();
+      // Automatically grant access to new users
+      const user = this.authService.getCurrentUser();
+      if (user) {
+        await this.accessService.autoGrantAccess(user.uid);
 
-      // Check if user has access, if not redirect to pending page
-      if (this.authService.hasAgentAccess()) {
+        // Wait a moment for the claims to be processed
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+
+        // Refresh token to get updated claims
+        await this.authService.refreshUserToken();
+
+        // Redirect directly to dashboard
         this.router.navigate(['/dashboard']);
       } else {
-        this.router.navigate(['/access-pending']);
+        throw new Error('User not found after signup');
       }
     } catch (error) {
       console.error('Error handling new user access:', error);
+      // If auto-granting fails, fall back to the access-pending screen
       this.router.navigate(['/access-pending']);
     }
   }
@@ -104,10 +114,26 @@ export class LoginComponent implements OnInit, OnDestroy {
       if (this.authService.hasAgentAccess()) {
         this.router.navigate(['/dashboard']);
       } else {
-        this.router.navigate(['/access-pending']);
+        // Automatically grant access to existing users who don't have it
+        const user = this.authService.getCurrentUser();
+        if (user) {
+          await this.accessService.autoGrantAccess(user.uid);
+
+          // Wait a moment for the claims to be processed
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+
+          // Refresh token to get updated claims
+          await this.authService.refreshUserToken();
+
+          // Redirect to dashboard
+          this.router.navigate(['/dashboard']);
+        } else {
+          throw new Error('User not found');
+        }
       }
     } catch (error) {
       console.error('Error checking user access:', error);
+      // If auto-granting fails, fall back to the access-pending screen
       this.router.navigate(['/access-pending']);
     }
   }
