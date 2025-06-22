@@ -17,10 +17,11 @@ prompt_writer_agent = Agent(
     description=DESCRIPTION,
     instruction=INSTRUCTION,
     output_key="video_prompts_response",
-    before_agent_callback=before_agent_callback,
-    after_agent_callback=after_agent_callback,
-    before_model_callback=before_model_callback,
-    after_model_callback=after_model_callback,
-    before_tool_callback=before_tool_callback,
-    after_tool_callback=after_tool_callback,
+    # Temporarily removing callbacks to debug "multiple tools" error
+    # before_agent_callback=before_agent_callback,
+    # after_agent_callback=after_agent_callback,
+    # before_model_callback=before_model_callback,
+    # after_model_callback=after_model_callback,
+    # before_tool_callback=before_tool_callback,
+    # after_tool_callback=after_tool_callback,
 )

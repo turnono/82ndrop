@@ -27,63 +27,56 @@ interface ChatMessage {
   imports: [CommonModule, FormsModule],
   template: `
     <div class="chat-container">
-      <!-- Header -->
       <div class="chat-header">
-        <button class="back-button" (click)="onBackToMenu()">← Back</button>
-        <div class="chat-title">
-          <h2>AI Agent Chat</h2>
-          <div class="connection-status" [class.connected]="isConnected">
-            {{ isConnected ? 'Connected' : 'Connecting...' }}
-          </div>
-        </div>
+        <h2>82ndrop Video Prompt Generator</h2>
+        <button (click)="startNewSession()" class="new-session-btn">
+          New Session
+        </button>
       </div>
 
-      <!-- Messages -->
-      <div class="chat-messages" #messagesContainer>
+      <div class="messages-container" #messagesContainer>
         <div
           *ngFor="let message of messages"
           class="message"
-          [class.user-message]="message.type === 'user'"
-          [class.agent-message]="message.type === 'agent'"
-          [class.system-message]="message.type === 'system'"
+          [ngClass]="message.type"
         >
           <div class="message-content">
-            <div class="message-text">{{ message.content }}</div>
-            <div class="message-time">{{ formatTime(message.timestamp) }}</div>
-          </div>
-
-          <div *ngIf="message.loading" class="loading-indicator">
-            <div class="spinner"></div>
+            <div
+              class="message-text"
+              [innerHTML]="formatMessageText(message.content)"
+            ></div>
+            <div class="message-timestamp">
+              {{ formatTimestamp(message.timestamp) }}
+            </div>
+            <div *ngIf="message.loading" class="loading-indicator">
+              <div class="spinner"></div>
+              <span>Generating response...</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Input -->
-      <div class="chat-input">
-        <div class="input-container">
+      <div class="input-container">
+        <div class="input-wrapper">
           <textarea
             [(ngModel)]="currentMessage"
             (keydown)="onEnterKey($event)"
-            placeholder="Ask me to create a video prompt..."
-            [disabled]="isLoading"
+            placeholder="Describe your video idea..."
+            class="message-input"
             rows="2"
-          >
-          </textarea>
+            [disabled]="isLoading"
+          ></textarea>
           <button
             (click)="sendMessage()"
             [disabled]="!currentMessage.trim() || isLoading"
             class="send-button"
           >
             <span *ngIf="!isLoading">Send</span>
-            <span *ngIf="isLoading">Sending...</span>
+            <span *ngIf="isLoading" class="loading">
+              <div class="spinner"></div>
+            </span>
           </button>
         </div>
-      </div>
-
-      <!-- Error Message -->
-      <div *ngIf="error" class="error-message">
-        {{ error }}
-        <button (click)="clearError()" class="close-error">×</button>
       </div>
     </div>
   `,
@@ -93,59 +86,48 @@ interface ChatMessage {
         display: flex;
         flex-direction: column;
         height: 100vh;
-        background: white;
-        position: relative;
+        max-width: 800px;
+        margin: 0 auto;
+        background: #f8f9fa;
       }
 
       .chat-header {
         display: flex;
+        justify-content: space-between;
         align-items: center;
         padding: 1rem;
-        background: #f8f9fa;
-        border-bottom: 1px solid #e0e0e0;
-        flex-shrink: 0;
+        background: white;
+        border-bottom: 1px solid #e9ecef;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       }
 
-      .back-button {
-        background: none;
-        border: none;
-        font-size: 1rem;
-        color: #007bff;
-        cursor: pointer;
-        padding: 0.5rem;
-        margin-right: 1rem;
-        border-radius: 4px;
-      }
-
-      .back-button:hover {
-        background: #e9ecef;
-      }
-
-      .chat-title h2 {
+      .chat-header h2 {
         margin: 0;
-        font-size: 1.2rem;
         color: #333;
+        font-size: 1.5rem;
       }
 
-      .connection-status {
-        font-size: 0.8rem;
-        color: #666;
-        margin-top: 0.2rem;
+      .new-session-btn {
+        padding: 0.5rem 1rem;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9rem;
       }
 
-      .connection-status.connected {
-        color: #28a745;
+      .new-session-btn:hover {
+        background: #0056b3;
       }
 
-      .chat-messages {
+      .messages-container {
         flex: 1;
         overflow-y: auto;
         padding: 1rem;
         display: flex;
         flex-direction: column;
         gap: 1rem;
-        scroll-behavior: smooth;
-        -webkit-overflow-scrolling: touch;
       }
 
       .message {
@@ -153,47 +135,114 @@ interface ChatMessage {
         max-width: 80%;
       }
 
-      .user-message {
+      .message.user {
         align-self: flex-end;
       }
 
-      .agent-message,
-      .system-message {
+      .message.agent {
         align-self: flex-start;
       }
 
+      .message.system {
+        align-self: center;
+        max-width: 90%;
+      }
+
       .message-content {
-        background: #f1f3f4;
-        padding: 0.75rem;
+        padding: 0.75rem 1rem;
         border-radius: 12px;
         position: relative;
       }
 
-      .user-message .message-content {
+      .user .message-content {
         background: #007bff;
         color: white;
       }
 
-      .system-message .message-content {
-        background: #ffc107;
-        color: #212529;
+      .agent .message-content {
+        background: white;
+        border: 1px solid #e9ecef;
+        color: #333;
+      }
+
+      .system .message-content {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        color: #6c757d;
+        text-align: center;
       }
 
       .message-text {
-        margin-bottom: 0.25rem;
-        white-space: pre-wrap;
+        line-height: 1.4;
         word-wrap: break-word;
       }
 
-      .message-time {
-        font-size: 0.7rem;
+      .message-timestamp {
+        font-size: 0.75rem;
         opacity: 0.7;
+        margin-top: 0.25rem;
       }
 
       .loading-indicator {
         display: flex;
         align-items: center;
-        margin-left: 0.5rem;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        opacity: 0.8;
+      }
+
+      .input-container {
+        padding: 1rem;
+        background: white;
+        border-top: 1px solid #e9ecef;
+      }
+
+      .input-wrapper {
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-end;
+      }
+
+      .message-input {
+        flex: 1;
+        padding: 0.75rem;
+        border: 1px solid #ced4da;
+        border-radius: 8px;
+        resize: vertical;
+        min-height: 44px;
+        max-height: 120px;
+        font-family: inherit;
+        font-size: 1rem;
+      }
+
+      .message-input:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+      }
+
+      .send-button {
+        padding: 0.75rem 1.5rem;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 1rem;
+        min-width: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .send-button:hover:not(:disabled) {
+        background: #0056b3;
+      }
+
+      .send-button:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
       }
 
       .spinner {
@@ -214,137 +263,55 @@ interface ChatMessage {
         }
       }
 
-      .chat-input {
-        padding: 1rem;
+      /* Enhanced formatting for agent responses */
+      .message-text :global(strong) {
+        font-weight: bold;
+      }
+
+      .message-text :global(em) {
+        font-style: italic;
+      }
+
+      .message-text :global(code) {
+        background: rgba(0, 0, 0, 0.1);
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+      }
+
+      .message-text :global(.json-block) {
         background: #f8f9fa;
-        border-top: 1px solid #e0e0e0;
-        flex-shrink: 0;
-      }
-
-      .input-container {
-        display: flex;
-        gap: 0.5rem;
-        align-items: flex-end;
-      }
-
-      textarea {
-        flex: 1;
-        border: 1px solid #ced4da;
+        border: 1px solid #e9ecef;
         border-radius: 4px;
-        padding: 0.75rem;
-        resize: none;
-        min-height: 44px;
-        max-height: 120px;
-        font-size: 16px; /* Prevents zoom on iOS */
-        font-family: inherit;
-        line-height: 1.4;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+        white-space: pre-wrap;
+        overflow-x: auto;
       }
 
-      textarea:focus {
-        outline: none;
-        border-color: #007bff;
-        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+      .agent .message-text :global(code) {
+        background: #f8f9fa;
       }
 
-      .send-button {
-        background: #007bff;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        padding: 0.75rem 1rem;
-        cursor: pointer;
-        font-size: 14px;
-        min-width: 70px;
-        height: 44px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .send-button:hover:not(:disabled) {
-        background: #0056b3;
-      }
-
-      .send-button:disabled {
-        background: #6c757d;
-        cursor: not-allowed;
-      }
-
-      .error-message {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: #dc3545;
-        color: white;
-        padding: 1rem 2rem;
-        border-radius: 4px;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        z-index: 1000;
-      }
-
-      .close-error {
-        background: none;
-        border: none;
-        color: white;
-        font-size: 1.2rem;
-        cursor: pointer;
-        padding: 0;
-        width: 24px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-      }
-
-      .close-error:hover {
+      .user .message-text :global(code) {
         background: rgba(255, 255, 255, 0.2);
-      }
-
-      /* Mobile optimizations */
-      @media (max-width: 768px) {
-        .chat-header {
-          padding: 0.75rem;
-        }
-
-        .chat-title h2 {
-          font-size: 1.1rem;
-        }
-
-        .message {
-          max-width: 90%;
-        }
-
-        .message-content {
-          padding: 0.6rem;
-        }
-
-        .chat-input {
-          padding: 0.75rem;
-        }
-
-        textarea {
-          font-size: 16px; /* Critical for iOS to prevent zoom */
-        }
       }
     `,
   ],
 })
 export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
-  @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
-  @Output() backToMenu = new EventEmitter<void>();
+  @ViewChild('messagesContainer') messagesContainer!: ElementRef;
+  @Output() promptGenerated = new EventEmitter<any>();
 
   messages: ChatMessage[] = [];
   currentMessage = '';
   isLoading = false;
-  isConnected = false;
-  error: string | null = null;
-  private subscriptions = new Subscription();
   private shouldScrollToBottom = false;
+
+  private subscriptions: Subscription[] = [];
 
   constructor(
     private agentService: AgentService,
@@ -352,10 +319,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   ) {}
 
   ngOnInit() {
-    this.checkConnection();
     this.addSystemMessage(
-      "Welcome! I'm your 82ndrop AI agent. Ask me to create video prompts for you."
+      "Welcome to 82ndrop! Describe your video idea and I'll help you create engaging prompts."
     );
+  }
+
+  ngOnDestroy() {
+    this.subscriptions.forEach((sub) => sub.unsubscribe());
   }
 
   ngAfterViewChecked() {
@@ -365,35 +335,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     }
   }
 
-  ngOnDestroy() {
-    this.subscriptions.unsubscribe();
-  }
-
   private scrollToBottom(): void {
     try {
-      if (this.messagesContainer) {
-        const element = this.messagesContainer.nativeElement;
-        // Force scroll to bottom with a slight delay to ensure DOM is updated
-        setTimeout(() => {
-          element.scrollTop = element.scrollHeight;
-        }, 100);
-      }
+      this.messagesContainer.nativeElement.scrollTop =
+        this.messagesContainer.nativeElement.scrollHeight;
     } catch (err) {
       console.error('Error scrolling to bottom:', err);
-    }
-  }
-
-  private async checkConnection() {
-    try {
-      await this.agentService.checkHealth();
-      this.isConnected = true;
-      this.addSystemMessage('Connected to 82ndrop AI Agent');
-    } catch (error) {
-      this.isConnected = false;
-      this.addSystemMessage(
-        'Failed to connect to agent. Please check your authentication.'
-      );
-      console.error('Connection check failed:', error);
     }
   }
 
@@ -424,25 +371,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.shouldScrollToBottom = true;
   }
 
-  onEnterKey(event: KeyboardEvent) {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      this.sendMessage();
-    }
-  }
-
   async sendMessage() {
     if (!this.currentMessage.trim() || this.isLoading) {
       return;
     }
 
-    const message = this.currentMessage.trim();
+    const userMessage = this.currentMessage.trim();
+    this.addUserMessage(userMessage);
     this.currentMessage = '';
     this.isLoading = true;
-    this.error = null;
-
-    // Add user message
-    this.addUserMessage(message);
 
     // Add loading message
     const loadingMessage: ChatMessage = {
@@ -456,7 +393,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
     try {
       const response: ChatResponse = await this.agentService.sendMessage(
-        message
+        userMessage
       );
 
       // Remove loading message
@@ -464,40 +401,63 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
       // Add agent response
       this.addAgentMessage(response.response, response.timestamp);
-    } catch (error: any) {
+
+      // Check if response contains JSON prompts and emit them
+      try {
+        const jsonMatch = response.response.match(/```json\n([\s\S]*?)\n```/);
+        if (jsonMatch) {
+          const promptData = JSON.parse(jsonMatch[1]);
+          this.promptGenerated.emit(promptData);
+        }
+      } catch (e) {
+        // Not a JSON response, that's fine
+      }
+    } catch (error) {
       console.error('Error sending message:', error);
 
       // Remove loading message
       this.messages = this.messages.filter((m) => !m.loading);
 
-      // Show error
-      if (error.status === 401 || error.status === 403) {
-        this.error = 'Authentication failed. Please sign in again.';
-        this.addSystemMessage(
-          'Authentication error. Please refresh and sign in again.'
-        );
-      } else {
-        this.error =
-          error.message || 'Failed to send message. Please try again.';
-        this.addSystemMessage('Error: ' + this.error);
-      }
+      // Add error message
+      this.addSystemMessage(
+        `❌ Error: ${
+          error instanceof Error
+            ? error.message
+            : 'Failed to send message. Please try again.'
+        }`
+      );
     } finally {
       this.isLoading = false;
     }
   }
 
-  clearError() {
-    this.error = null;
+  onEnterKey(event: KeyboardEvent) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.sendMessage();
+    }
   }
 
-  onBackToMenu() {
-    this.backToMenu.emit();
+  startNewSession() {
+    this.agentService.startNewSession();
+    this.messages = [];
+    this.addSystemMessage(
+      'New session started. What video idea would you like to explore?'
+    );
   }
 
-  formatTime(timestamp: string): string {
-    return new Date(timestamp).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  formatTimestamp(timestamp: string): string {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  formatMessageText(text: string): string {
+    // Basic markdown formatting and line breaks
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+      .replace(/\*(.*?)\*/g, '<em>$1</em>') // Italic
+      .replace(/\n/g, '<br>') // Line breaks
+      .replace(/```json\n([\s\S]*?)\n```/g, '<pre class="json-block">$1</pre>') // JSON blocks
+      .replace(/`(.*?)`/g, '<code>$1</code>'); // Inline code
   }
 }

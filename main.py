@@ -44,6 +44,9 @@ logger = logging.getLogger(__name__)
 api_logger = APILogger()
 firebase_initialized = initialize_firebase()
 
+# Local development token for testing (bypass Firebase auth)
+LOCAL_DEV_TOKEN = os.environ.get('LOCAL_DEV_TOKEN')
+
 # Get the directory where main.py is located
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Example session DB URL (e.g., SQLite)
@@ -76,11 +79,6 @@ async def firebase_auth_middleware(request: Request, call_next):
     if request.url.path in ["/", "/health", "/docs", "/openapi.json"] or request.url.path.startswith("/static"):
         return await call_next(request)
     
-    # Skip authentication if Firebase is not initialized (for local dev)
-    if not firebase_initialized:
-        logger.warning("Firebase not initialized, skipping authentication")
-        return await call_next(request)
-    
     # Check for Authorization header
     auth_header = request.headers.get("Authorization")
     if not auth_header:
@@ -97,6 +95,28 @@ async def firebase_auth_middleware(request: Request, call_next):
         )
     
     token = auth_header.split(" ")[1]
+    
+    # Local development bypass - allow using the actual Firebase token directly
+    if LOCAL_DEV_TOKEN and LOCAL_DEV_TOKEN == "firebase":
+        logger.info("Using local development mode with Firebase token")
+        # Use Firebase token verification even in local mode
+        try:
+            decoded_token = verify_firebase_token(token)
+            request.state.user = decoded_token
+            request.state.user_id = decoded_token.get('uid')
+            request.state.user_email = decoded_token.get('email')
+            return await call_next(request)
+        except Exception as e:
+            logger.error(f"Firebase token verification failed in local mode: {e}")
+            return JSONResponse(
+                status_code=401,
+                content={"detail": f"Firebase authentication failed: {e}"}
+            )
+    
+    # Skip authentication if Firebase is not initialized (for local dev)
+    if not firebase_initialized:
+        logger.warning("Firebase not initialized, skipping authentication")
+        return await call_next(request)
     
     # Verify Firebase token
     try:

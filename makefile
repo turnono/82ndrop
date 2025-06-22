@@ -118,8 +118,8 @@ test-agent:
 	@echo "[Test Agent] Testing agent with authentication..."
 	curl -X POST "https://drop-agent-service-855515190257.us-central1.run.app/run" \
 		-H "Content-Type: application/json" \
-		-H "Authorization: Bearer test-token" \
-		-d '{"appName": "drop_agent", "userId": "test-user", "sessionId": "test-session", "newMessage": {"parts": [{"text": "Hello"}], "role": "user"}}'
+		-H "Authorization: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjNiZjA1MzkxMzk2OTEzYTc4ZWM4MGY0MjcwMzM4NjM2NDA2MTBhZGMiLCJ0eXAiOiJKV1QifQ.eyJuYW1lIjoiYWJkdWxsYWggYWJyYWhhbXMiLCJwaWN0dXJlIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jSlVPSWx1SUtVOHQ2aGtmZzQ0NENRcjhORHUzeDJIQkZFaG9YUGJrN3JKWnZUNEJJNF81UT1zOTYtYyIsImFnZW50QWNjZXNzIjp0cnVlLCJhZ2VudF9hY2Nlc3MiOnRydWUsImFjY2Vzc19sZXZlbCI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiYWdlbnRfcGVybWlzc2lvbnMiOnsiODJuZHJvcCI6dHJ1ZSwidmlkZW9fcHJvbXB0cyI6dHJ1ZSwic2VhcmNoX2FnZW50Ijp0cnVlLCJndWlkZV9hZ2VudCI6dHJ1ZSwicHJvbXB0X3dyaXRlciI6dHJ1ZX0sImdyYW50ZWRfYXQiOiIyMDI1LTA2LTIxVDIwOjE1OjAwWiIsImlzcyI6Imh0dHBzOi8vc2VjdXJldG9rZW4uZ29vZ2xlLmNvbS90YWFqaXJhaCIsImF1ZCI6InRhYWppcmFoIiwiYXV0aF90aW1lIjoxNzUwNTgwMjkzLCJ1c2VyX2lkIjoiaVZaNFB1OVl6WFRHT28yZFhSTG1KaGJnRW5sMSIsInN1YiI6ImlWWjRQdTlZelhUR09vMmRYUkxtSmhiZ0VubDEiLCJpYXQiOjE3NTA1OTgxNjgsImV4cCI6MTc1MDYwMTc2OCwiZW1haWwiOiJ0dXJub25vQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJmaXJlYmFzZSI6eyJpZGVudGl0aWVzIjp7Imdvb2dsZS5jb20iOlsiMTA4NzczNTM5NDI4MDc0MTcxMjE2Il0sImVtYWlsIjpbInR1cm5vbm9AZ21haWwuY29tIl19LCJzaWduX2luX3Byb3ZpZGVyIjoiZ29vZ2xlLmNvbSJ9fQ.gQxwR5wOh9almpZBfvbac2_jeWYaVU9KVxlITMvaF3ell4_sOn6SvsaOJSuHSjogqQsdVr5WLdXxQmb7IRfs_vNXjSaL08rUhhrOiEURUv9cchwf39J-2mwnY8Y6MqqRTaZmNeP48RUfCduxewB8e2nNxzaX7a4Rab3WuMYouLEtg8uOUEuh5GL6SnotH8z3BBWFHbke_ot16ZDfNRe5EdOTafQc1oXnEiaBLjnkcGi3MmZkUCjlSyQUWyK-kzEN4v14mXAClZusLe2fweRZz3dHxDYyRe-szDeESUbLCAcvMAuM5bTTxS-Fc2ZzzEYvRm6MWpRJmoPuY3TT3yf1Ow" \
+		-d '{"appName": "drop_agent", "userId": "iVZ4Pu9YzXTGOo2dXRLmJhbgEnl1", "sessionId": "test-session", "newMessage": {"parts": [{"text": "Hello, can you help me test the 82ndrop agent functionality?"}], "role": "user"}}'
 
 logs:
 	@echo "[View Logs] Viewing recent Cloud Run logs..."

@@ -31,7 +31,7 @@ export interface AgentRunRequest {
 export interface AgentEvent {
   id: string;
   author: string;
-  content: string;
+  content: any;
   timestamp: string;
   type: string;
 }
@@ -57,9 +57,9 @@ export interface UserProfile {
   providedIn: 'root',
 })
 export class AgentService {
-  private apiUrl = environment.apiUrl || 'http://127.0.0.1:8000'; // Use environment config
+  private apiUrl = environment.apiUrl || 'http://127.0.0.1:8000';
   private currentSessionId: string | null = null;
-  private appName = 'drop_agent'; // Updated app name
+  private appName = 'drop_agent';
 
   // Observable for chat messages
   private messagesSubject = new BehaviorSubject<any[]>([]);
@@ -166,7 +166,7 @@ export class AgentService {
         },
       };
 
-      // Use the /run endpoint instead of /run_sse for better compatibility
+      // Use the /run endpoint for better compatibility
       const response = await this.http
         .post<any>(`${this.apiUrl}/run`, runRequest, { headers })
         .toPromise();
@@ -176,56 +176,76 @@ export class AgentService {
 
       // Handle different response formats
       if (Array.isArray(response)) {
-        // If response is an array of events (like from run)
-        const agentResponse = response.find(
-          (event: any) => event.author !== 'user' && event.content
-        );
-        if (agentResponse) {
-          // Handle ADK response format: content.parts[0].text
+        // Look for the LAST agent response with actual text content (not function calls)
+        let finalTextResponse = null;
+        let workingAgents: string[] = [];
+
+        // Process all events to build workflow steps and find final response
+        for (const event of response) {
+          if (event.author !== 'user' && event.content) {
+            if (event.content.parts && event.content.parts[0]) {
+              const part = event.content.parts[0];
+
+              // Track function calls (workflow steps)
+              if (part.functionCall) {
+                const funcCall = part.functionCall;
+                const agentName = this.getAgentDisplayName(
+                  funcCall.args?.agent_name || funcCall.name
+                );
+                workingAgents.push(`🤖 ${agentName}`);
+              }
+              // Capture actual text responses
+              else if (part.text && part.text.trim()) {
+                finalTextResponse = {
+                  content: part.text,
+                  author: event.author,
+                  timestamp: event.timestamp,
+                };
+              }
+            }
+          }
+        }
+
+        // Use the final text response if we found one
+        if (finalTextResponse) {
+          agentContent = finalTextResponse.content;
+          responseTimestamp = finalTextResponse.timestamp || responseTimestamp;
+
+          // Add workflow context if we tracked working agents
+          if (workingAgents.length > 0) {
+            const workflowInfo = `🔄 **Workflow:** ${workingAgents.join(
+              ' → '
+            )}\n\n`;
+            agentContent = workflowInfo + agentContent;
+          }
+        } else if (workingAgents.length > 0) {
+          // If we only have function calls, show workflow status
+          agentContent = `🔄 **Multi-Agent Workflow Active**\n\n${workingAgents.join(
+            ' → '
+          )}\n\n⏳ Processing your request...`;
+        } else {
+          // Fallback to original logic
+          const agentResponse = response.find(
+            (event: any) => event.author !== 'user' && event.content
+          );
           if (
+            agentResponse &&
             agentResponse.content &&
             agentResponse.content.parts &&
-            agentResponse.content.parts[0] &&
-            agentResponse.content.parts[0].text
+            agentResponse.content.parts[0]
           ) {
-            agentContent = agentResponse.content.parts[0].text;
-          } else if (typeof agentResponse.content === 'string') {
-            agentContent = agentResponse.content;
-          } else {
-            agentContent = JSON.stringify(agentResponse.content, null, 2);
+            const part = agentResponse.content.parts[0];
+            agentContent = part.text || JSON.stringify(part, null, 2);
+            responseTimestamp = agentResponse.timestamp || responseTimestamp;
           }
-          responseTimestamp = agentResponse.timestamp || responseTimestamp;
         }
       } else if (response && typeof response === 'object') {
-        // If response is a single object - check various possible fields
-        if (response.content) {
-          agentContent = response.content;
-          responseTimestamp = response.timestamp || responseTimestamp;
-        } else if (response.response) {
-          agentContent = response.response;
-          responseTimestamp = response.timestamp || responseTimestamp;
-        } else if (response.message) {
-          agentContent = response.message;
-        } else if (response.text) {
-          agentContent = response.text;
-        } else if (response.output) {
-          agentContent = response.output;
-        } else if (response.result) {
-          agentContent = response.result;
-        } else if (response.data) {
-          agentContent = response.data;
-        } else {
-          // Check if there's any string value in the object
-          const stringValues = Object.values(response).filter(
-            (v) => typeof v === 'string' && v.trim().length > 0
-          );
-          if (stringValues.length > 0) {
-            agentContent = stringValues[0] as string;
-          } else {
-            // Last resort - prettify the JSON response
-            agentContent = JSON.stringify(response, null, 2);
-          }
-        }
+        agentContent =
+          response.response ||
+          response.content ||
+          response.message ||
+          JSON.stringify(response, null, 2);
+        responseTimestamp = response.timestamp || responseTimestamp;
       } else if (typeof response === 'string') {
         agentContent = response;
       }
@@ -242,30 +262,29 @@ export class AgentService {
         timestamp: responseTimestamp,
       };
 
-      // Add to messages stream
-      const currentMessages = this.messagesSubject.value;
-      const newMessages = [
-        ...currentMessages,
-        { type: 'user', content: message, timestamp: new Date().toISOString() },
-        {
-          type: 'agent',
-          content: chatResponse.response,
-          timestamp: chatResponse.timestamp,
-        },
-      ];
-      this.messagesSubject.next(newMessages);
-
       return chatResponse;
     } catch (error) {
       console.error('Error sending message to agent:', error);
-      // If it's a parsing error, try to extract meaningful info
-      if (error instanceof Error && error.message.includes('parsing')) {
-        throw new Error(
-          'Failed to parse response from server. Please try again.'
-        );
-      }
       throw error;
     }
+  }
+
+  /**
+   * Get user-friendly agent names
+   */
+  private getAgentDisplayName(agentName: string): string {
+    const agentNames: { [key: string]: string } = {
+      guide_agent: 'Guide Agent',
+      search_agent: 'Search Agent',
+      prompt_writer_agent: 'Prompt Writer Agent',
+      drop_agent: '82ndrop Root Agent',
+      task_master_agent: 'Task Master Agent',
+    };
+
+    return (
+      agentNames[agentName] ||
+      agentName.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+    );
   }
 
   /**
