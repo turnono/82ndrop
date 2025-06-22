@@ -238,6 +238,85 @@ interface ChatMessage {
         cursor: pointer;
         color: #721c24;
       }
+
+      /* Mobile optimizations */
+      @media (max-width: 768px) {
+        .chat-container {
+          height: 100%;
+          border-radius: 0;
+          box-shadow: none;
+        }
+
+        .chat-header {
+          padding: 12px 16px;
+        }
+
+        .chat-header h3 {
+          font-size: 16px;
+        }
+
+        .status-indicator {
+          font-size: 11px;
+          padding: 3px 6px;
+        }
+
+        .chat-messages {
+          padding: 12px;
+          gap: 12px;
+        }
+
+        .message {
+          max-width: 90%;
+        }
+
+        .message-content {
+          padding: 12px 16px;
+          border-radius: 18px;
+        }
+
+        .message-text {
+          font-size: 14px;
+          line-height: 1.4;
+        }
+
+        .message-time {
+          font-size: 10px;
+          margin-top: 4px;
+        }
+
+        .chat-input {
+          padding: 12px;
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(10px);
+        }
+
+        .input-container {
+          gap: 8px;
+        }
+
+        textarea {
+          border-radius: 20px;
+          padding: 12px 16px;
+          font-size: 14px;
+          border: 1px solid #e0e0e0;
+          background: white;
+        }
+
+        .send-button {
+          border-radius: 20px;
+          padding: 12px 20px;
+          font-size: 14px;
+          font-weight: 600;
+          min-width: 60px;
+        }
+
+        .error-message {
+          margin: 12px;
+          padding: 12px;
+          border-radius: 12px;
+          font-size: 14px;
+        }
+      }
     `,
   ],
 })

@@ -13,7 +13,7 @@ import { ChatComponent } from '../chat/chat.component';
 })
 export class DashboardComponent implements OnInit {
   user: AuthUser | null = null;
-  showChat = false;
+  showChat = true; // Show chat immediately on dashboard load
 
   constructor(private authService: AuthService) {}
 

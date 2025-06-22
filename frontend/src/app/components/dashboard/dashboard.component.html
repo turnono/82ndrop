@@ -1,59 +1,89 @@
 <div class="dashboard-container">
+    <!-- Compact Header -->
     <header class="dashboard-header">
         <div class="header-content">
-            <h1>82ndrop Dashboard</h1>
-            <div class="user-info" *ngIf="user">
-                <div class="user-details">
-                    <img [src]="user.photoURL || '/assets/default-avatar.png'" [alt]="user.displayName || 'User'"
-                        class="user-avatar">
-                    <div class="user-text">
-                        <span class="user-name">{{ user.displayName || user.email }}</span>
-                        <span class="user-email" *ngIf="user.displayName">{{ user.email }}</span>
+            <div class="brand-section">
+                <div class="brand-icon">🎬</div>
+                <div class="brand-text">
+                    <h1>82ndrop</h1>
+                    <span class="tagline">AI Video Prompt Assistant</span>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <div class="user-info" *ngIf="user">
+                    <div class="user-avatar-container">
+                        <img [src]="user.photoURL || '/assets/default-avatar.png'" [alt]="user.displayName || 'User'"
+                            class="user-avatar">
+                    </div>
+                    <div class="user-dropdown">
+                        <div class="user-details">
+                            <span class="user-name">{{ user.displayName || user.email }}</span>
+                            <span class="user-email" *ngIf="user.displayName">{{ user.email }}</span>
+                        </div>
+                        <button class="btn btn-ghost btn-sm" (click)="onSignOut()">
+                            Sign Out
+                        </button>
                     </div>
                 </div>
-                <button class="btn btn-outline" (click)="onSignOut()">
-                    Sign Out
-                </button>
             </div>
         </div>
     </header>
 
+    <!-- Main Content Area -->
     <main class="dashboard-main">
-        <div class="welcome-section">
-            <h2>Welcome to 82ndrop!</h2>
-            <p>Generate amazing video prompts with AI assistance.</p>
-        </div>
-
-        <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon">🎬</div>
-                <h3>Video Prompts</h3>
-                <p>Generate creative video prompts for your content</p>
-                <button class="btn btn-primary" (click)="showChat = true">Start Creating</button>
+        <!-- Chat Interface - Full Featured -->
+        <div class="chat-container" *ngIf="showChat">
+            <div class="chat-header">
+                <div class="chat-title">
+                    <div class="status-dot"></div>
+                    <h2>AI Agent Chat</h2>
+                </div>
+                <div class="chat-actions">
+                    <button class="btn btn-ghost btn-sm" (click)="showChat = false">
+                        <span class="icon">←</span>
+                        Back to Menu
+                    </button>
+                </div>
             </div>
 
-            <div class="feature-card">
-                <div class="feature-icon">🚀</div>
-                <h3>AI Assistant</h3>
-                <p>Get help with creative ideas and concepts</p>
-                <button class="btn btn-primary" (click)="showChat = true">Chat Now</button>
-            </div>
-
-            <div class="feature-card">
-                <div class="feature-icon">📊</div>
-                <h3>Analytics</h3>
-                <p>View your usage statistics and insights</p>
-                <button class="btn btn-primary" routerLink="/analytics">View Analytics</button>
+            <div class="chat-content">
+                <app-chat></app-chat>
             </div>
         </div>
 
-        <!-- Chat Interface -->
-        <div class="chat-section" *ngIf="showChat">
-            <div class="section-header">
-                <h2>82ndrop AI Agent</h2>
-                <button class="btn btn-outline" (click)="showChat = false">Hide Chat</button>
+        <!-- Landing View -->
+        <div class="landing-view" *ngIf="!showChat">
+            <div class="hero-section">
+                <div class="hero-content">
+                    <h1>Create Amazing Video Prompts</h1>
+                    <p>Transform your ideas into professional video prompts with AI assistance</p>
+                    <button class="btn btn-primary btn-lg" (click)="showChat = true">
+                        <span class="icon">🚀</span>
+                        Start Creating
+                    </button>
+                </div>
             </div>
-            <app-chat></app-chat>
+
+            <div class="features-showcase">
+                <div class="feature-item">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Smart Guidance</h3>
+                    <p>AI helps structure your video ideas into complete prompts</p>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">🔍</div>
+                    <h3>Enhanced Research</h3>
+                    <p>Automatically enhance prompts with relevant information</p>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">✨</div>
+                    <h3>Professional Output</h3>
+                    <p>Generate production-ready video prompts instantly</p>
+                </div>
+            </div>
         </div>
     </main>
 </div>

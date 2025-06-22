@@ -176,16 +176,28 @@ export class AgentService {
 
       // Handle different response formats
       if (Array.isArray(response)) {
-        // If response is an array of events (like from run_sse)
+        // If response is an array of events (like from run)
         const agentResponse = response.find(
           (event: any) => event.author !== 'user' && event.content
         );
         if (agentResponse) {
-          agentContent = agentResponse.content;
+          // Handle ADK response format: content.parts[0].text
+          if (
+            agentResponse.content &&
+            agentResponse.content.parts &&
+            agentResponse.content.parts[0] &&
+            agentResponse.content.parts[0].text
+          ) {
+            agentContent = agentResponse.content.parts[0].text;
+          } else if (typeof agentResponse.content === 'string') {
+            agentContent = agentResponse.content;
+          } else {
+            agentContent = JSON.stringify(agentResponse.content, null, 2);
+          }
           responseTimestamp = agentResponse.timestamp || responseTimestamp;
         }
       } else if (response && typeof response === 'object') {
-        // If response is a single object
+        // If response is a single object - check various possible fields
         if (response.content) {
           agentContent = response.content;
           responseTimestamp = response.timestamp || responseTimestamp;
@@ -194,9 +206,25 @@ export class AgentService {
           responseTimestamp = response.timestamp || responseTimestamp;
         } else if (response.message) {
           agentContent = response.message;
+        } else if (response.text) {
+          agentContent = response.text;
+        } else if (response.output) {
+          agentContent = response.output;
+        } else if (response.result) {
+          agentContent = response.result;
+        } else if (response.data) {
+          agentContent = response.data;
         } else {
-          // Fallback - stringify the response
-          agentContent = JSON.stringify(response);
+          // Check if there's any string value in the object
+          const stringValues = Object.values(response).filter(
+            (v) => typeof v === 'string' && v.trim().length > 0
+          );
+          if (stringValues.length > 0) {
+            agentContent = stringValues[0] as string;
+          } else {
+            // Last resort - prettify the JSON response
+            agentContent = JSON.stringify(response, null, 2);
+          }
         }
       } else if (typeof response === 'string') {
         agentContent = response;

@@ -59,10 +59,10 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.authSubscription = this.authService.getUser().subscribe((user) => {
       if (user) {
         // User is authenticated, go to dashboard
-        this.router.navigate(['/dashboard']);
+        this.router.navigate(['/dashboard'], { replaceUrl: true });
       } else {
         // User is not authenticated, go to login
-        this.router.navigate(['/login']);
+        this.router.navigate(['/login'], { replaceUrl: true });
       }
     });
   }
