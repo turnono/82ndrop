@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { AuthService, AuthUser } from '../../services/auth.service';
@@ -12,6 +12,7 @@ import { ChatComponent } from '../chat/chat.component';
   styleUrls: ['./dashboard.component.scss'],
 })
 export class DashboardComponent implements OnInit, OnDestroy {
+  @ViewChild(ChatComponent) chatComponent!: ChatComponent;
   user: AuthUser | null = null;
   private _showChat = true; // Start directly in chat, user can go back to dashboard with back button
 
@@ -52,5 +53,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Sign out error:', error);
     }
+  }
+
+  startNewSession() {
+    this.showChat = true;
+    // Wait for the view to update, then call startNewSession on the chat component
+    setTimeout(() => {
+      if (this.chatComponent) {
+        this.chatComponent.startNewSession();
+      }
+    }, 0);
   }
 }
