@@ -1,4 +1,11 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  OnDestroy,
+  ViewChild,
+  ElementRef,
+  AfterViewChecked,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgentService, ChatResponse } from '../../services/agent.service';
@@ -83,6 +90,7 @@ interface ChatMessage {
         border-radius: 8px;
         background: white;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        position: relative;
       }
 
       .chat-header {
@@ -109,11 +117,18 @@ interface ChatMessage {
 
       .chat-messages {
         flex: 1;
-        overflow-y: auto;
+        overflow-y: scroll;
+        overflow-x: hidden;
         padding: 1rem;
         display: flex;
         flex-direction: column;
         gap: 1rem;
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+        min-height: 0;
+        max-height: calc(
+          600px - 120px
+        ); /* Account for header + input on desktop */
       }
 
       .message {
@@ -242,9 +257,13 @@ interface ChatMessage {
       /* Mobile optimizations */
       @media (max-width: 768px) {
         .chat-container {
-          height: 100%;
+          height: 100vh;
           border-radius: 0;
           box-shadow: none;
+          max-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          position: relative;
         }
 
         .chat-header {
@@ -263,6 +282,11 @@ interface ChatMessage {
         .chat-messages {
           padding: 12px;
           gap: 12px;
+          flex: 1;
+          min-height: 0;
+          overflow-y: scroll;
+          -webkit-overflow-scrolling: touch;
+          padding-bottom: 100px; /* Extra space for input */
         }
 
         .message {
@@ -288,6 +312,13 @@ interface ChatMessage {
           padding: 12px;
           background: rgba(255, 255, 255, 0.95);
           backdrop-filter: blur(10px);
+          position: fixed;
+          bottom: 30px;
+          left: 0;
+          right: 0;
+          border-top: 1px solid #e0e0e0;
+          z-index: 1000;
+          box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
         }
 
         .input-container {
@@ -320,13 +351,16 @@ interface ChatMessage {
     `,
   ],
 })
-export class ChatComponent implements OnInit, OnDestroy {
+export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
+  @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
+
   messages: ChatMessage[] = [];
   currentMessage = '';
   isLoading = false;
   isConnected = false;
   error: string | null = null;
   private subscriptions = new Subscription();
+  private shouldScrollToBottom = false;
 
   constructor(
     private agentService: AgentService,
@@ -340,8 +374,29 @@ export class ChatComponent implements OnInit, OnDestroy {
     );
   }
 
+  ngAfterViewChecked() {
+    if (this.shouldScrollToBottom) {
+      this.scrollToBottom();
+      this.shouldScrollToBottom = false;
+    }
+  }
+
   ngOnDestroy() {
     this.subscriptions.unsubscribe();
+  }
+
+  private scrollToBottom(): void {
+    try {
+      if (this.messagesContainer) {
+        const element = this.messagesContainer.nativeElement;
+        // Force scroll to bottom with a slight delay to ensure DOM is updated
+        setTimeout(() => {
+          element.scrollTop = element.scrollHeight;
+        }, 100);
+      }
+    } catch (err) {
+      console.error('Error scrolling to bottom:', err);
+    }
   }
 
   private async checkConnection() {
@@ -364,6 +419,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       content,
       timestamp: new Date().toISOString(),
     });
+    this.shouldScrollToBottom = true;
   }
 
   private addUserMessage(content: string) {
@@ -372,6 +428,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       content,
       timestamp: new Date().toISOString(),
     });
+    this.shouldScrollToBottom = true;
   }
 
   private addAgentMessage(content: string, timestamp?: string) {
@@ -380,6 +437,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       content,
       timestamp: timestamp || new Date().toISOString(),
     });
+    this.shouldScrollToBottom = true;
   }
 
   onEnterKey(event: KeyboardEvent) {
@@ -410,6 +468,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       loading: true,
     };
     this.messages.push(loadingMessage);
+    this.shouldScrollToBottom = true;
 
     try {
       const response: ChatResponse = await this.agentService.sendMessage(
