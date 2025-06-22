@@ -47,6 +47,4 @@ After every analysis, you MUST ALWAYS transfer to prompt_writer_agent. Never end
 Example:
 [Your analysis here]
 
-Now I will transfer this to the prompt_writer_agent.
-
-transfer_to_agent(agent_name="prompt_writer_agent")"""
+**CRITICAL: After analysis, you MUST call the transfer_to_agent function - do NOT just write it as text.**"""
