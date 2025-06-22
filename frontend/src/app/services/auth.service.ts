@@ -87,8 +87,6 @@ export class AuthService {
         email,
         password
       );
-      console.log('Sign up successful:', credential.user);
-
       // Note: Custom claims will be set by backend or cloud function
       // User may need to wait or refresh token to get access
     } catch (error) {
@@ -107,7 +105,6 @@ export class AuthService {
         email,
         password
       );
-      console.log('Sign in successful:', credential.user);
     } catch (error) {
       console.error('Sign in error:', error);
       throw error;
@@ -121,7 +118,6 @@ export class AuthService {
     try {
       const provider = new GoogleAuthProvider();
       const credential = await signInWithPopup(this.auth, provider);
-      console.log('Google sign in successful:', credential.user);
     } catch (error) {
       console.error('Google sign in error:', error);
       throw error;
@@ -135,7 +131,6 @@ export class AuthService {
     try {
       await signOut(this.auth);
       this.router.navigate(['/']);
-      console.log('Sign out successful');
     } catch (error) {
       console.error('Sign out error:', error);
       throw error;

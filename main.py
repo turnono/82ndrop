@@ -1,4 +1,6 @@
 import os
+import logging
+from logging_config import APILogger
 import firebase_admin
 from firebase_admin import credentials, auth
 from fastapi import Request, HTTPException
@@ -34,10 +36,12 @@ def verify_firebase_token(token: str):
         decoded_token = auth.verify_id_token(token)
         return decoded_token
     except Exception as e:
-        print(f"Token verification failed: {e}")
+        logger.warning(f"Token verification failed: {e}")
         raise HTTPException(status_code=401, detail="Invalid authentication token")
 
-# Initialize Firebase
+# Initialize Firebase and Logger
+logger = logging.getLogger(__name__)
+api_logger = APILogger()
 firebase_initialized = initialize_firebase()
 
 # Get the directory where main.py is located
@@ -74,7 +78,7 @@ async def firebase_auth_middleware(request: Request, call_next):
     
     # Skip authentication if Firebase is not initialized (for local dev)
     if not firebase_initialized:
-        print("Warning: Firebase not initialized, skipping authentication")
+        logger.warning("Firebase not initialized, skipping authentication")
         return await call_next(request)
     
     # Check for Authorization header
@@ -101,13 +105,30 @@ async def firebase_auth_middleware(request: Request, call_next):
         request.state.user = decoded_token
         request.state.user_id = decoded_token.get('uid')
         request.state.user_email = decoded_token.get('email')
+        api_logger.log_authentication(
+            user_id=decoded_token.get('uid'),
+            email=decoded_token.get('email'),
+            success=True
+        )
     except HTTPException as e:
+        api_logger.log_authentication(
+            user_id=None,
+            email=None,
+            success=False,
+            reason=e.detail
+        )
         return JSONResponse(
             status_code=e.status_code,
             content={"detail": e.detail}
         )
     except Exception as e:
-        print(f"Unexpected error during token verification: {e}")
+        logger.error(f"Unexpected error during token verification: {e}")
+        api_logger.log_authentication(
+            user_id=None,
+            email=None,
+            success=False,
+            reason=str(e)
+        )
         return JSONResponse(
             status_code=401,
             content={"detail": "Authentication failed"}
@@ -130,6 +151,7 @@ async def get_user_profile(request: Request):
     # Get user info from middleware
     user_token = getattr(request.state, 'user', None)
     if not user_token:
+        # This case should ideally not be reached if middleware is effective
         raise HTTPException(status_code=401, detail="User not authenticated")
     
     # Extract user information and custom claims
@@ -159,4 +181,6 @@ async def get_user_profile(request: Request):
 
 if __name__ == "__main__":
     # Use port 8000 to avoid conflict with Jenkins on 8080
+    logging.basicConfig(level=logging.INFO)
+    logger.info("Starting 82ndrop agent server...")
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000))) 
