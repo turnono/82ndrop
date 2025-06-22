@@ -160,10 +160,91 @@ async def test_json_format_validation():
     start_time = time.time()
     
     try:
-        # Test valid JSON examples from terminal session
+        # Test valid JSON examples for new composition format
         valid_examples = [
-            '```json\n{\n  "top": "Wall Street\'s Newest Analyst",\n  "center": "A gorilla in a suit passionately explains stock market trends using charts and graphs.",\n  "bottom": "Invest like a beast! #stocks #finance #gorilla"\n}\n```',
-            '```json\n{\n  "top": "Overheard in the Animal Kingdom",\n  "center": "Animals hilariously commentating on human behavior",\n  "bottom": "They think WE\'RE the weird ones..."\n}\n```',
+            '''```json
+{
+  "composition": {
+    "layer_count": 3,
+    "canvas_type": "vertical_short_form",
+    "total_duration": "20-30 seconds",
+    "composition_style": "comedy_layered"
+  },
+  "layers": [
+    {
+      "layer_id": 1,
+      "layer_type": "text_overlay",
+      "position": "top_third",
+      "content_prompt": "Create animated text: 'Wall Street's newest analyst'",
+      "visual_style": "professional_title_text",
+      "duration": "full_video",
+      "z_index": 3
+    },
+    {
+      "layer_id": 2,
+      "layer_type": "main_content",
+      "position": "center_main",
+      "content_prompt": "Film a gorilla in a suit passionately explaining stock market trends using charts and graphs",
+      "visual_style": "professional_comedy",
+      "duration": "full_video",
+      "z_index": 1
+    },
+    {
+      "layer_id": 3,
+      "layer_type": "caption_layer",
+      "position": "bottom_third",
+      "content_prompt": "Create stock terms and price updates as scrolling text overlays",
+      "visual_style": "financial_ticker_style",
+      "duration": "last_10_seconds",
+      "z_index": 2
+    }
+  ],
+  "final_video": {
+    "title": "Wall Street's Newest Analyst",
+    "description": "When the market needs a primal perspective",
+    "hashtags": ["#stocks", "#finance", "#gorilla", "#comedy"],
+    "call_to_action": "What stock would you trust a gorilla with?",
+    "engagement_hook": "Wall Street's getting wild"
+  }
+}
+```''',
+            '''```json
+{
+  "composition": {
+    "layer_count": 2,
+    "canvas_type": "vertical_short_form",
+    "total_duration": "15-20 seconds",
+    "composition_style": "floating_overlay"
+  },
+  "layers": [
+    {
+      "layer_id": 1,
+      "layer_type": "main_content",
+      "position": "full_screen",
+      "content_prompt": "Film animals in their natural habitat with realistic behavior",
+      "visual_style": "nature_documentary",
+      "duration": "full_video",
+      "z_index": 1
+    },
+    {
+      "layer_id": 2,
+      "layer_type": "text_overlay",
+      "position": "floating_overlay",
+      "content_prompt": "Create animated speech bubbles with animal thoughts about humans",
+      "visual_style": "cartoon_speech_bubbles",
+      "duration": "full_video",
+      "z_index": 2
+    }
+  ],
+  "final_video": {
+    "title": "Overheard in the Animal Kingdom",
+    "description": "What animals really think about us humans",
+    "hashtags": ["#animals", "#comedy", "#perspective"],
+    "call_to_action": "What would your pet say about you?",
+    "engagement_hook": "They think WE'RE the weird ones"
+  }
+}
+```''',
         ]
         
         for i, example in enumerate(valid_examples):
@@ -175,16 +256,43 @@ async def test_json_format_validation():
             # Parse JSON
             parsed = json.loads(json_content)
             
-            # Validate required fields
-            required_fields = ["top", "center", "bottom"]
-            for field in required_fields:
-                if field not in parsed:
-                    raise Exception(f"Example {i+1} missing field: {field}")
+            # Validate required fields for new composition format
+            if "composition" not in parsed:
+                raise Exception(f"Example {i+1} missing composition field")
+            if "layers" not in parsed:
+                raise Exception(f"Example {i+1} missing layers field")
+            if "final_video" not in parsed:
+                raise Exception(f"Example {i+1} missing final_video field")
+                
+            # Validate composition structure
+            composition = parsed["composition"]
+            composition_fields = ["layer_count", "canvas_type", "total_duration", "composition_style"]
+            for field in composition_fields:
+                if field not in composition:
+                    raise Exception(f"Example {i+1} composition missing field: {field}")
                     
-            # Validate field types and content
-            for field in required_fields:
-                if not isinstance(parsed[field], str) or len(parsed[field].strip()) == 0:
-                    raise Exception(f"Example {i+1} field {field} is not a valid string")
+            # Validate layers array
+            layers = parsed["layers"]
+            if not isinstance(layers, list) or len(layers) == 0:
+                raise Exception(f"Example {i+1} layers must be a non-empty array")
+                
+            # Validate each layer structure
+            required_layer_fields = ["layer_id", "layer_type", "position", "content_prompt", "visual_style", "duration", "z_index"]
+            for j, layer in enumerate(layers):
+                for field in required_layer_fields:
+                    if field not in layer:
+                        raise Exception(f"Example {i+1} layer {j+1} missing field: {field}")
+                        
+            # Validate final_video structure
+            final_video = parsed["final_video"]
+            final_video_fields = ["title", "description", "hashtags", "call_to_action", "engagement_hook"]
+            for field in final_video_fields:
+                if field not in final_video:
+                    raise Exception(f"Example {i+1} final_video missing field: {field}")
+                    
+            # Validate field types
+            if not isinstance(final_video["hashtags"], list):
+                raise Exception(f"Example {i+1} final_video hashtags must be an array")
         
         duration = time.time() - start_time
         print(f"✅ PASS: JSON format validation test completed in {duration:.2f}s")
@@ -195,7 +303,7 @@ async def test_json_format_validation():
             "duration": duration,
             "metrics": {
                 "examples_tested": len(valid_examples),
-                "fields_per_example": len(required_fields),
+                "required_layer_fields": len(required_layer_fields),
             },
         }
         

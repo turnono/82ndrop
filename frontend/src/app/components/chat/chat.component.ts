@@ -15,10 +15,11 @@ import { AuthService } from '../../services/auth.service';
 import { Subscription } from 'rxjs';
 
 interface ChatMessage {
-  type: 'user' | 'agent' | 'system';
+  type: 'user' | 'agent' | 'system' | 'progress';
   content: string;
   timestamp: string;
   loading?: boolean;
+  workflowSteps?: string[];
 }
 
 @Component({
@@ -27,324 +28,400 @@ interface ChatMessage {
   imports: [CommonModule, FormsModule],
   template: `
     <div class="chat-container">
-      <!-- Header -->
-      <div class="chat-header">
-        <button class="back-button" (click)="onBackToMenu()">← Back</button>
-        <div class="chat-title">
-          <h2>AI Agent Chat</h2>
-          <div class="connection-status" [class.connected]="isConnected">
-            {{ isConnected ? 'Connected' : 'Connecting...' }}
-          </div>
-        </div>
-      </div>
-
-      <!-- Messages -->
-      <div class="chat-messages" #messagesContainer>
+      <div class="messages-container" #messagesContainer>
         <div
           *ngFor="let message of messages"
           class="message"
-          [class.user-message]="message.type === 'user'"
-          [class.agent-message]="message.type === 'agent'"
-          [class.system-message]="message.type === 'system'"
+          [ngClass]="message.type"
         >
           <div class="message-content">
-            <div class="message-text">{{ message.content }}</div>
-            <div class="message-time">{{ formatTime(message.timestamp) }}</div>
-          </div>
+            <div
+              class="message-text"
+              [innerHTML]="formatMessageText(message.content)"
+            ></div>
 
-          <div *ngIf="message.loading" class="loading-indicator">
-            <div class="spinner"></div>
+            <!-- Workflow progress indicator -->
+            <div
+              *ngIf="message.type === 'progress' && message.workflowSteps"
+              class="workflow-steps"
+            >
+              <div
+                *ngFor="let step of message.workflowSteps"
+                class="workflow-step"
+              >
+                {{ step }}
+              </div>
+            </div>
+
+            <div class="message-timestamp">
+              {{ formatTimestamp(message.timestamp) }}
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Input -->
-      <div class="chat-input">
-        <div class="input-container">
-          <textarea
+      <div class="input-container">
+        <div class="input-wrapper">
+          <input
+            #messageInput
+            type="text"
             [(ngModel)]="currentMessage"
-            (keydown)="onEnterKey($event)"
-            placeholder="Ask me to create a video prompt..."
-            [disabled]="isLoading"
-            rows="2"
-          >
-          </textarea>
+            (keyup.enter)="sendMessage()"
+            placeholder="What kind of video do you want to create?"
+            class="message-input"
+          />
           <button
             (click)="sendMessage()"
-            [disabled]="!currentMessage.trim() || isLoading"
             class="send-button"
+            [disabled]="isLoading || !currentMessage.trim()"
           >
-            <span *ngIf="!isLoading">Send</span>
-            <span *ngIf="isLoading">Sending...</span>
+            <span class="send-icon">→</span>
           </button>
         </div>
-      </div>
-
-      <!-- Error Message -->
-      <div *ngIf="error" class="error-message">
-        {{ error }}
-        <button (click)="clearError()" class="close-error">×</button>
       </div>
     </div>
   `,
   styles: [
     `
       .chat-container {
+        height: 100%;
         display: flex;
         flex-direction: column;
-        height: 100vh;
-        background: white;
-        position: relative;
-      }
-
-      .chat-header {
-        display: flex;
-        align-items: center;
-        padding: 1rem;
         background: #f8f9fa;
-        border-bottom: 1px solid #e0e0e0;
-        flex-shrink: 0;
       }
 
-      .back-button {
-        background: none;
-        border: none;
-        font-size: 1rem;
-        color: #007bff;
-        cursor: pointer;
-        padding: 0.5rem;
-        margin-right: 1rem;
-        border-radius: 4px;
-      }
-
-      .back-button:hover {
-        background: #e9ecef;
-      }
-
-      .chat-title h2 {
-        margin: 0;
-        font-size: 1.2rem;
-        color: #333;
-      }
-
-      .connection-status {
-        font-size: 0.8rem;
-        color: #666;
-        margin-top: 0.2rem;
-      }
-
-      .connection-status.connected {
-        color: #28a745;
-      }
-
-      .chat-messages {
+      .messages-container {
         flex: 1;
         overflow-y: auto;
-        padding: 1rem;
+        padding: 20px;
         display: flex;
         flex-direction: column;
-        gap: 1rem;
-        scroll-behavior: smooth;
-        -webkit-overflow-scrolling: touch;
+        gap: 16px;
       }
 
       .message {
-        display: flex;
         max-width: 80%;
-      }
-
-      .user-message {
-        align-self: flex-end;
-      }
-
-      .agent-message,
-      .system-message {
-        align-self: flex-start;
-      }
-
-      .message-content {
-        background: #f1f3f4;
-        padding: 0.75rem;
-        border-radius: 12px;
-        position: relative;
-      }
-
-      .user-message .message-content {
-        background: #007bff;
-        color: white;
-      }
-
-      .system-message .message-content {
-        background: #ffc107;
-        color: #212529;
-      }
-
-      .message-text {
-        margin-bottom: 0.25rem;
-        white-space: pre-wrap;
         word-wrap: break-word;
       }
 
-      .message-time {
-        font-size: 0.7rem;
+      .message.user {
+        align-self: flex-end;
+      }
+
+      .message.assistant {
+        align-self: flex-start;
+      }
+
+      .message.progress {
+        align-self: flex-start;
+        max-width: 90%;
+      }
+
+      .message-content {
+        padding: 12px 16px;
+        border-radius: 18px;
+        position: relative;
+      }
+
+      .message.user .message-content {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
+      .message.assistant .message-content {
+        background: white;
+        border: 1px solid #e9ecef;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .message.progress .message-content {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-left: 4px solid #667eea;
+      }
+
+      .message-text {
+        margin-bottom: 4px;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
+      }
+
+      .message-timestamp {
+        font-size: 11px;
         opacity: 0.7;
       }
 
-      .loading-indicator {
-        display: flex;
-        align-items: center;
-        margin-left: 0.5rem;
-      }
-
-      .spinner {
-        width: 16px;
-        height: 16px;
-        border: 2px solid #f3f3f3;
-        border-top: 2px solid #007bff;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-      }
-
-      @keyframes spin {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-
-      .chat-input {
-        padding: 1rem;
-        background: #f8f9fa;
-        border-top: 1px solid #e0e0e0;
-        flex-shrink: 0;
-      }
-
       .input-container {
+        padding: 20px;
+        background: white;
+        border-top: 1px solid #e9ecef;
+      }
+
+      .input-wrapper {
         display: flex;
-        gap: 0.5rem;
+        gap: 12px;
         align-items: flex-end;
+        max-width: 800px;
+        margin: 0 auto;
       }
 
-      textarea {
+      .message-input {
         flex: 1;
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-        padding: 0.75rem;
+        padding: 12px 16px;
+        border: 2px solid #e9ecef;
+        border-radius: 20px;
+        outline: none;
+        font-size: 16px;
         resize: none;
-        min-height: 44px;
-        max-height: 120px;
-        font-size: 16px; /* Prevents zoom on iOS */
-        font-family: inherit;
-        line-height: 1.4;
+        transition: border-color 0.2s;
       }
 
-      textarea:focus {
-        outline: none;
-        border-color: #007bff;
-        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+      .message-input:focus {
+        border-color: #667eea;
       }
 
       .send-button {
+        padding: 12px 24px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        transition: transform 0.2s;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .send-button:hover:not(:disabled) {
+        transform: translateY(-1px);
+      }
+
+      .send-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .send-icon {
+        font-size: 16px;
+      }
+
+      .workflow-steps {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #dee2e6;
+      }
+
+      .workflow-step {
+        font-size: 12px;
+        color: #6c757d;
+        margin: 2px 0;
+        padding: 2px 8px;
+        background: rgba(102, 126, 234, 0.1);
+        border-radius: 12px;
+        display: inline-block;
+        margin-right: 4px;
+        margin-bottom: 4px;
+      }
+
+      .json-container {
+        margin: 12px 0;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #f8f9fa;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
+      }
+
+      .json-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background: #e9ecef;
+        border-bottom: 1px solid #dee2e6;
+      }
+
+      .json-label {
+        font-weight: 600;
+        color: #495057;
+        font-size: 14px;
+      }
+
+      .copy-json-btn {
+        padding: 4px 8px;
         background: #007bff;
         color: white;
         border: none;
         border-radius: 4px;
-        padding: 0.75rem 1rem;
         cursor: pointer;
-        font-size: 14px;
-        min-width: 70px;
-        height: 44px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        font-size: 11px;
+        transition: all 0.2s;
       }
 
-      .send-button:hover:not(:disabled) {
+      .copy-json-btn:hover {
         background: #0056b3;
+        transform: translateY(-1px);
       }
 
-      .send-button:disabled {
-        background: #6c757d;
-        cursor: not-allowed;
+      .json-block {
+        background: white;
+        padding: 12px;
+        margin: 0;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: pre-wrap;
+        overflow-x: auto;
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        -ms-user-select: text;
+        user-select: text;
       }
 
-      .error-message {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: #dc3545;
-        color: white;
-        padding: 1rem 2rem;
-        border-radius: 4px;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        z-index: 1000;
-      }
-
-      .close-error {
-        background: none;
-        border: none;
-        color: white;
-        font-size: 1.2rem;
-        cursor: pointer;
-        padding: 0;
-        width: 24px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-      }
-
-      .close-error:hover {
-        background: rgba(255, 255, 255, 0.2);
-      }
-
-      /* Mobile optimizations */
-      @media (max-width: 768px) {
-        .chat-header {
-          padding: 0.75rem;
+      /* Desktop enhancements for chat */
+      @media (min-width: 1200px) {
+        .chat-container {
+          background: #fafbfc;
         }
 
-        .chat-title h2 {
-          font-size: 1.1rem;
+        .messages-container {
+          padding: 32px 48px;
+          gap: 24px;
         }
 
         .message {
-          max-width: 90%;
+          max-width: 70%;
         }
 
         .message-content {
-          padding: 0.6rem;
+          padding: 16px 20px;
+          border-radius: 20px;
         }
 
-        .chat-input {
-          padding: 0.75rem;
+        .message.assistant .message-content {
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
 
-        textarea {
-          font-size: 16px; /* Critical for iOS to prevent zoom */
+        .message-text {
+          font-size: 15px;
+          line-height: 1.6;
+        }
+
+        .message-timestamp {
+          font-size: 12px;
+        }
+
+        .input-container {
+          padding: 32px 48px;
+          background: white;
+          border-top: 1px solid #e9ecef;
+        }
+
+        .input-wrapper {
+          max-width: 1000px;
+          gap: 16px;
+        }
+
+        .message-input {
+          padding: 16px 20px;
+          font-size: 16px;
+          border-radius: 24px;
+          border-width: 2px;
+        }
+
+        .send-button {
+          padding: 16px 28px;
+          border-radius: 24px;
+          font-size: 15px;
+        }
+
+        .workflow-step {
+          font-size: 13px;
+          padding: 4px 12px;
+          border-radius: 14px;
+        }
+
+        .json-container {
+          margin: 16px 0;
+          border-radius: 12px;
+        }
+
+        .json-header {
+          padding: 12px 16px;
+        }
+
+        .json-label {
+          font-size: 15px;
+        }
+
+        .copy-json-btn {
+          padding: 6px 12px;
+          font-size: 12px;
+          border-radius: 6px;
+        }
+
+        .json-block {
+          padding: 16px;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+      }
+
+      @media (min-width: 1400px) {
+        .messages-container {
+          padding: 40px 64px;
+          gap: 28px;
+        }
+
+        .message-content {
+          padding: 18px 24px;
+          border-radius: 22px;
+        }
+
+        .message-text {
+          font-size: 16px;
+        }
+
+        .input-container {
+          padding: 40px 64px;
+        }
+
+        .message-input {
+          padding: 18px 24px;
+          font-size: 17px;
+          border-radius: 26px;
+        }
+
+        .send-button {
+          padding: 18px 32px;
+          border-radius: 26px;
+          font-size: 16px;
+        }
+
+        .json-block {
+          padding: 20px;
+          font-size: 14px;
         }
       }
     `,
   ],
 })
 export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
-  @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
+  @ViewChild('messagesContainer') messagesContainer!: ElementRef;
+  @Output() promptGenerated = new EventEmitter<any>();
   @Output() backToMenu = new EventEmitter<void>();
 
   messages: ChatMessage[] = [];
   currentMessage = '';
   isLoading = false;
-  isConnected = false;
-  error: string | null = null;
-  private subscriptions = new Subscription();
   private shouldScrollToBottom = false;
+
+  private subscriptions: Subscription[] = [];
 
   constructor(
     private agentService: AgentService,
@@ -352,10 +429,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   ) {}
 
   ngOnInit() {
-    this.checkConnection();
     this.addSystemMessage(
-      "Welcome! I'm your 82ndrop AI agent. Ask me to create video prompts for you."
+      "Welcome to 82ndrop! Describe your video idea and I'll help you create engaging prompts."
     );
+  }
+
+  ngOnDestroy() {
+    this.subscriptions.forEach((sub) => sub.unsubscribe());
   }
 
   ngAfterViewChecked() {
@@ -365,35 +445,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     }
   }
 
-  ngOnDestroy() {
-    this.subscriptions.unsubscribe();
-  }
-
   private scrollToBottom(): void {
     try {
-      if (this.messagesContainer) {
-        const element = this.messagesContainer.nativeElement;
-        // Force scroll to bottom with a slight delay to ensure DOM is updated
-        setTimeout(() => {
-          element.scrollTop = element.scrollHeight;
-        }, 100);
-      }
+      this.messagesContainer.nativeElement.scrollTop =
+        this.messagesContainer.nativeElement.scrollHeight;
     } catch (err) {
       console.error('Error scrolling to bottom:', err);
-    }
-  }
-
-  private async checkConnection() {
-    try {
-      await this.agentService.checkHealth();
-      this.isConnected = true;
-      this.addSystemMessage('Connected to 82ndrop AI Agent');
-    } catch (error) {
-      this.isConnected = false;
-      this.addSystemMessage(
-        'Failed to connect to agent. Please check your authentication.'
-      );
-      console.error('Connection check failed:', error);
     }
   }
 
@@ -424,11 +481,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.shouldScrollToBottom = true;
   }
 
-  onEnterKey(event: KeyboardEvent) {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      this.sendMessage();
-    }
+  private addProgressMessage(content: string, workflowSteps: string[] = []) {
+    this.messages.push({
+      type: 'progress',
+      content,
+      timestamp: new Date().toISOString(),
+      workflowSteps,
+    });
+    this.shouldScrollToBottom = true;
   }
 
   async sendMessage() {
@@ -436,68 +496,131 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       return;
     }
 
-    const message = this.currentMessage.trim();
+    const userMessage = this.currentMessage.trim();
     this.currentMessage = '';
     this.isLoading = true;
-    this.error = null;
 
     // Add user message
-    this.addUserMessage(message);
+    this.addUserMessage(userMessage);
 
-    // Add loading message
-    const loadingMessage: ChatMessage = {
-      type: 'agent',
-      content: 'Thinking...',
+    // Add progress message that will be updated in real-time
+    const progressMessage: ChatMessage = {
+      type: 'progress',
+      content: 'Starting analysis...',
       timestamp: new Date().toISOString(),
-      loading: true,
+      workflowSteps: [],
     };
-    this.messages.push(loadingMessage);
+    this.messages.push(progressMessage);
     this.shouldScrollToBottom = true;
 
     try {
-      const response: ChatResponse = await this.agentService.sendMessage(
-        message
+      // Use SSE for real-time updates
+      const response = await this.agentService.sendMessageWithSSE(
+        userMessage,
+        (update) => {
+          // Update progress message in real-time
+          const progressIndex = this.messages.length - 1;
+          if (this.messages[progressIndex]?.type === 'progress') {
+            if (update.type === 'workflow_step') {
+              this.messages[progressIndex].content = update.message;
+              this.messages[progressIndex].workflowSteps = update.agents;
+            } else if (update.type === 'final_response') {
+              // Remove progress message and add final response
+              this.messages.splice(progressIndex, 1);
+              this.addAgentMessage(update.message, update.timestamp);
+
+              // Check if response contains JSON and emit it
+              try {
+                const jsonMatch = update.message.match(
+                  /```json\s*([\s\S]*?)\s*```/
+                );
+                if (jsonMatch) {
+                  const jsonContent = jsonMatch[1];
+                  const parsedJson = JSON.parse(jsonContent);
+                  this.promptGenerated.emit(parsedJson);
+                }
+              } catch (e) {
+                console.log(
+                  'Response does not contain valid JSON, continuing normally'
+                );
+              }
+            }
+            this.shouldScrollToBottom = true;
+          }
+        }
       );
 
-      // Remove loading message
-      this.messages = this.messages.filter((m) => !m.loading);
-
-      // Add agent response
-      this.addAgentMessage(response.response, response.timestamp);
-    } catch (error: any) {
+      console.log('SSE Response received:', response);
+    } catch (error) {
       console.error('Error sending message:', error);
 
-      // Remove loading message
-      this.messages = this.messages.filter((m) => !m.loading);
-
-      // Show error
-      if (error.status === 401 || error.status === 403) {
-        this.error = 'Authentication failed. Please sign in again.';
-        this.addSystemMessage(
-          'Authentication error. Please refresh and sign in again.'
-        );
-      } else {
-        this.error =
-          error.message || 'Failed to send message. Please try again.';
-        this.addSystemMessage('Error: ' + this.error);
+      // Remove progress message and show error
+      const progressIndex = this.messages.findIndex(
+        (m) => m.type === 'progress'
+      );
+      if (progressIndex >= 0) {
+        this.messages.splice(progressIndex, 1);
       }
+
+      this.addAgentMessage(
+        'Sorry, I encountered an error while processing your request. Please try again.',
+        new Date().toISOString()
+      );
     } finally {
       this.isLoading = false;
     }
   }
 
-  clearError() {
-    this.error = null;
+  onEnterKey(event: KeyboardEvent) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.sendMessage();
+    }
   }
 
-  onBackToMenu() {
-    this.backToMenu.emit();
+  startNewSession() {
+    this.agentService.startNewSession();
+    this.messages = [];
+    this.addSystemMessage(
+      'New session started. What video idea would you like to explore?'
+    );
   }
 
-  formatTime(timestamp: string): string {
-    return new Date(timestamp).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  formatTimestamp(timestamp: string): string {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  formatMessageText(text: string): string {
+    // Basic markdown formatting and line breaks
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+      .replace(/\*(.*?)\*/g, '<em>$1</em>') // Italic
+      .replace(/\n/g, '<br>') // Line breaks
+      .replace(/```json\n([\s\S]*?)\n```/g, (match, jsonContent) => {
+        return `<div class="json-container">
+          <div class="json-header">
+            <span class="json-label">📋 Video Composition JSON</span>
+            <button class="copy-json-btn" onclick="
+              navigator.clipboard.writeText(\`${jsonContent.replace(
+                /`/g,
+                '\\`'
+              )}\`).then(() => {
+                this.textContent = '✅ Copied!';
+                this.style.background = '#28a745';
+                setTimeout(() => {
+                  this.textContent = '📋 Copy';
+                  this.style.background = '#007bff';
+                }, 2000);
+              }).catch(() => {
+                this.textContent = '❌ Failed';
+                setTimeout(() => this.textContent = '📋 Copy', 2000);
+              })
+            ">📋 Copy</button>
+          </div>
+          <pre class="json-block">${jsonContent}</pre>
+        </div>`;
+      }) // JSON blocks with copy button
+      .replace(/`(.*?)`/g, '<code>$1</code>'); // Inline code
   }
 }

@@ -1,20 +1,34 @@
 <div class="dashboard-container">
-    <!-- Compact Header - Only show when not in chat mode -->
-    <header class="dashboard-header" *ngIf="!showChat">
+    <!-- Compact Header - Always visible -->
+    <header class="dashboard-header" [class.compact]="showChat">
         <div class="header-content">
-            <div class="brand-section">
-                <div class="brand-icon">🎬</div>
-                <div class="brand-text">
-                    <h1>82ndrop</h1>
-                    <span class="tagline">AI Video Prompt Assistant</span>
+            <div class="header-left">
+                <button *ngIf="showChat" class="back-button" (click)="showChat = false" title="Back to Dashboard">
+                    <span class="back-icon">←</span>
+                </button>
+                <div class="brand-section">
+                    <div class="brand-icon">🎬</div>
+                    <div class="brand-text">
+                        <h1>82ndrop</h1>
+                        <span class="tagline">Video Prompt Generator</span>
+                    </div>
                 </div>
             </div>
+
+            <!-- Center Plus Button -->
+            <button class="center-plus-button" (click)="startNewSession()" title="Start New Session">
+                <span class="plus-icon">+</span>
+            </button>
 
             <div class="header-actions">
                 <div class="user-info" *ngIf="user">
                     <div class="user-avatar-container">
                         <img [src]="user.photoURL || '/assets/default-avatar.png'" [alt]="user.displayName || 'User'"
-                            class="user-avatar">
+                            class="user-avatar"
+                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                        <div class="user-avatar user-fallback" style="display: none;">
+                            👤
+                        </div>
                     </div>
                     <div class="user-dropdown">
                         <div class="user-details">
@@ -43,7 +57,7 @@
                 <div class="hero-content">
                     <h1>Create Amazing Video Prompts</h1>
                     <p>Transform your ideas into professional video prompts with AI assistance</p>
-                    <button class="btn btn-primary btn-lg" (click)="showChat = true">
+                    <button class="btn btn-primary btn-lg" (click)="startNewSession()">
                         <span class="icon">🚀</span>
                         Start Creating
                     </button>
