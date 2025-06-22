@@ -336,8 +336,9 @@ export class AgentService {
    */
   async checkHealth(): Promise<any> {
     try {
+      const headers = await this.getAuthHeaders();
       // Use list-apps endpoint as a health check since /health doesn't exist in ADK
-      return this.http.get(`${this.apiUrl}/list-apps`).toPromise();
+      return this.http.get(`${this.apiUrl}/list-apps`, { headers }).toPromise();
     } catch (error) {
       console.error('Error checking API health:', error);
       throw error;

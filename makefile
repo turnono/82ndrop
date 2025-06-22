@@ -39,8 +39,28 @@ GOOGLE_GENAI_USE_VERTEXAI=${GOOGLE_GENAI_USE_VERTEXAI},\
 REASONING_ENGINE_ID=${REASONING_ENGINE_ID},\
 ENV=${ENV}"
 
-deploy-with-auth:
-	@echo "[Deploy with Firebase Auth] Deploying agent with Firebase authentication..."
+deploy-staging:
+	@echo "[Deploy Staging] Deploying staging service (OPEN ACCESS for testing)..."
+	@if [ -z "${GOOGLE_CLOUD_PROJECT}" ]; then \
+		echo "❌ Error: GOOGLE_CLOUD_PROJECT environment variable is not set."; \
+		echo "Set it in your drop_agent/.env file"; \
+		exit 1; \
+	fi
+	gcloud run deploy drop-agent-staging \
+		--source . \
+		--region ${GOOGLE_CLOUD_LOCATION} \
+		--allow-unauthenticated \
+		--port 8000 \
+		--service-account ${GOOGLE_CLOUD_PROJECT}@appspot.gserviceaccount.com \
+		--set-env-vars="GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT},\
+GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION},\
+GOOGLE_GENAI_USE_VERTEXAI=${GOOGLE_GENAI_USE_VERTEXAI},\
+REASONING_ENGINE_ID=${REASONING_ENGINE_ID},\
+ENV=${ENV},\
+FIREBASE_PROJECT_ID=${GOOGLE_CLOUD_PROJECT}"
+
+deploy-production:
+	@echo "[Deploy Production] Deploying production service (FIREBASE AUTH REQUIRED)..."
 	@if [ -z "${GOOGLE_CLOUD_PROJECT}" ]; then \
 		echo "❌ Error: GOOGLE_CLOUD_PROJECT environment variable is not set."; \
 		echo "Set it in your drop_agent/.env file"; \
@@ -57,8 +77,7 @@ GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION},\
 GOOGLE_GENAI_USE_VERTEXAI=${GOOGLE_GENAI_USE_VERTEXAI},\
 REASONING_ENGINE_ID=${REASONING_ENGINE_ID},\
 ENV=${ENV},\
-FIREBASE_PROJECT_ID=${GOOGLE_CLOUD_PROJECT},\
-GOOGLE_API_KEY=${GOOGLE_API_KEY}"
+FIREBASE_PROJECT_ID=${GOOGLE_CLOUD_PROJECT}"
 
 deploy-include-vertex-session-storage:
 	@echo "[Deploy with Authentication + Vertex] Deploying with authentication and managed session service..."
@@ -86,6 +105,10 @@ test-local:
 	@echo "[Test Local] Starting local development server..."
 	python main.py
 
+test-auth:
+	@echo "[Test Authentication] Running Firebase authentication tests..."
+	python test_auth.py
+
 check-auth:
 	@echo "[Check Authentication] Testing authentication status..."
 	curl -X GET "https://drop-agent-service-855515190257.us-central1.run.app/" \
@@ -110,9 +133,11 @@ help:
 	@echo "  make deploy-include-vertex       - Deploy with Vertex AI session storage"
 	@echo "  make deploy-frontend             - Deploy Angular frontend"
 	@echo "  make test-local                  - Run local development server"
+	@echo "  make test-auth                   - Test Firebase authentication"
 	@echo "  make check-auth                  - Test if deployed service requires auth"
 	@echo "  make deploy-gcloud              - Deploy agent with Firebase authentication using gcloud run deploy"
-	@echo "  make deploy-with-auth            - Deploy agent with Firebase authentication"
+	@echo "  make deploy-staging             - Deploy staging service (open access for testing)"
+	@echo "  make deploy-production          - Deploy production service (Firebase auth required)"
 	@echo "  make test-agent                  - Test agent with authentication"
 	@echo "  make logs                        - View recent Cloud Run logs"
 	@echo ""

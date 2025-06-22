@@ -1,2 +1,4 @@
 google_adk
+firebase-admin
+requests
 # Add any other dependencies your agent needs
