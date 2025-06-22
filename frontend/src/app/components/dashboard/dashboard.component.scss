@@ -373,6 +373,166 @@
   }
 }
 
+// Desktop enhancements (1200px and up)
+@media (min-width: 1200px) {
+  .dashboard-header .header-content {
+    padding: 20px 32px;
+    max-width: 1600px;
+  }
+
+  .brand-section {
+    gap: 16px;
+
+    .brand-icon {
+      font-size: 32px;
+    }
+
+    .brand-text {
+      h1 {
+        font-size: 28px;
+      }
+
+      .tagline {
+        font-size: 14px;
+      }
+    }
+  }
+
+  .user-avatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  .dashboard-main {
+    padding: 48px 32px;
+    max-width: 1600px;
+
+    &.full-screen {
+      max-width: none;
+    }
+  }
+
+  .chat-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    height: calc(100vh - 160px);
+    border-radius: 32px;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+
+    .dashboard-main.full-screen & {
+      max-width: none;
+      margin: 0;
+      border-radius: 0;
+      height: calc(100vh - 80px);
+    }
+  }
+
+  .hero-section {
+    margin-bottom: 80px;
+
+    .hero-content {
+      max-width: 800px;
+
+      h1 {
+        font-size: 64px;
+        margin-bottom: 24px;
+        letter-spacing: -0.02em;
+      }
+
+      p {
+        font-size: 24px;
+        margin-bottom: 48px;
+        line-height: 1.6;
+      }
+    }
+  }
+
+  .features-showcase {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 48px;
+    max-width: 1200px;
+  }
+
+  .feature-item {
+    padding: 48px 32px;
+    border-radius: 24px;
+
+    .feature-icon {
+      font-size: 48px;
+      margin-bottom: 24px;
+    }
+
+    h3 {
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+
+    p {
+      font-size: 16px;
+      line-height: 1.7;
+    }
+  }
+
+  .btn {
+    &.btn-primary.btn-lg {
+      padding: 20px 40px;
+      font-size: 18px;
+      border-radius: 20px;
+    }
+  }
+
+  .center-plus-button {
+    width: 44px;
+    height: 44px;
+    border-width: 3px;
+
+    .plus-icon {
+      font-size: 22px;
+    }
+  }
+}
+
+// Large desktop enhancements (1400px and up)
+@media (min-width: 1400px) {
+  .dashboard-header .header-content {
+    padding: 24px 48px;
+  }
+
+  .dashboard-main {
+    padding: 64px 48px;
+  }
+
+  .hero-section .hero-content {
+    h1 {
+      font-size: 72px;
+    }
+
+    p {
+      font-size: 26px;
+    }
+  }
+
+  .features-showcase {
+    gap: 64px;
+  }
+
+  .feature-item {
+    padding: 56px 40px;
+
+    .feature-icon {
+      font-size: 56px;
+    }
+
+    h3 {
+      font-size: 26px;
+    }
+
+    p {
+      font-size: 17px;
+    }
+  }
+}
+
 // Responsive design
 @media (max-width: 1024px) {
   .dashboard-main {

@@ -282,6 +282,132 @@ interface ChatMessage {
         -ms-user-select: text;
         user-select: text;
       }
+
+      /* Desktop enhancements for chat */
+      @media (min-width: 1200px) {
+        .chat-container {
+          background: #fafbfc;
+        }
+
+        .messages-container {
+          padding: 32px 48px;
+          gap: 24px;
+        }
+
+        .message {
+          max-width: 70%;
+        }
+
+        .message-content {
+          padding: 16px 20px;
+          border-radius: 20px;
+        }
+
+        .message.assistant .message-content {
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .message-text {
+          font-size: 15px;
+          line-height: 1.6;
+        }
+
+        .message-timestamp {
+          font-size: 12px;
+        }
+
+        .input-container {
+          padding: 32px 48px;
+          background: white;
+          border-top: 1px solid #e9ecef;
+        }
+
+        .input-wrapper {
+          max-width: 1000px;
+          gap: 16px;
+        }
+
+        .message-input {
+          padding: 16px 20px;
+          font-size: 16px;
+          border-radius: 24px;
+          border-width: 2px;
+        }
+
+        .send-button {
+          padding: 16px 28px;
+          border-radius: 24px;
+          font-size: 15px;
+        }
+
+        .workflow-step {
+          font-size: 13px;
+          padding: 4px 12px;
+          border-radius: 14px;
+        }
+
+        .json-container {
+          margin: 16px 0;
+          border-radius: 12px;
+        }
+
+        .json-header {
+          padding: 12px 16px;
+        }
+
+        .json-label {
+          font-size: 15px;
+        }
+
+        .copy-json-btn {
+          padding: 6px 12px;
+          font-size: 12px;
+          border-radius: 6px;
+        }
+
+        .json-block {
+          padding: 16px;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+      }
+
+      @media (min-width: 1400px) {
+        .messages-container {
+          padding: 40px 64px;
+          gap: 28px;
+        }
+
+        .message-content {
+          padding: 18px 24px;
+          border-radius: 22px;
+        }
+
+        .message-text {
+          font-size: 16px;
+        }
+
+        .input-container {
+          padding: 40px 64px;
+        }
+
+        .message-input {
+          padding: 18px 24px;
+          font-size: 17px;
+          border-radius: 26px;
+        }
+
+        .send-button {
+          padding: 18px 32px;
+          border-radius: 26px;
+          font-size: 16px;
+        }
+
+        .json-block {
+          padding: 20px;
+          font-size: 14px;
+        }
+      }
     `,
   ],
 })
