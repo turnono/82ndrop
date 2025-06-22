@@ -1,6 +1,12 @@
 /* You can add global styles to this file, and also import other style files */
 
 /* Disable scrolling when in chat mode */
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
 body.no-scroll {
   overflow: hidden;
   position: fixed;

@@ -13,7 +13,7 @@ import { ChatComponent } from '../chat/chat.component';
 })
 export class DashboardComponent implements OnInit, OnDestroy {
   user: AuthUser | null = null;
-  private _showChat = true; // Show chat immediately on dashboard load
+  private _showChat = true; // Start directly in chat, user can go back to dashboard with back button
 
   constructor(private authService: AuthService) {}
 
