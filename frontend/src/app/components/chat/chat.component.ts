@@ -5,6 +5,8 @@ import {
   ViewChild,
   ElementRef,
   AfterViewChecked,
+  Output,
+  EventEmitter,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -25,13 +27,18 @@ interface ChatMessage {
   imports: [CommonModule, FormsModule],
   template: `
     <div class="chat-container">
+      <!-- Header -->
       <div class="chat-header">
-        <h3>82ndrop AI Agent</h3>
-        <div class="status-indicator" [class.connected]="isConnected">
-          {{ isConnected ? 'Connected' : 'Disconnected' }}
+        <button class="back-button" (click)="onBackToMenu()">← Back</button>
+        <div class="chat-title">
+          <h2>AI Agent Chat</h2>
+          <div class="connection-status" [class.connected]="isConnected">
+            {{ isConnected ? 'Connected' : 'Connecting...' }}
+          </div>
         </div>
       </div>
 
+      <!-- Messages -->
       <div class="chat-messages" #messagesContainer>
         <div
           *ngFor="let message of messages"
@@ -51,6 +58,7 @@ interface ChatMessage {
         </div>
       </div>
 
+      <!-- Input -->
       <div class="chat-input">
         <div class="input-container">
           <textarea
@@ -72,6 +80,7 @@ interface ChatMessage {
         </div>
       </div>
 
+      <!-- Error Message -->
       <div *ngIf="error" class="error-message">
         {{ error }}
         <button (click)="clearError()" class="close-error">×</button>
@@ -83,52 +92,60 @@ interface ChatMessage {
       .chat-container {
         display: flex;
         flex-direction: column;
-        height: 600px;
-        max-width: 800px;
-        margin: 0 auto;
-        border: 1px solid #e0e0e0;
-        border-radius: 8px;
+        height: 100vh;
         background: white;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         position: relative;
       }
 
       .chat-header {
         display: flex;
-        justify-content: space-between;
         align-items: center;
         padding: 1rem;
         background: #f8f9fa;
         border-bottom: 1px solid #e0e0e0;
-        border-radius: 8px 8px 0 0;
+        flex-shrink: 0;
       }
 
-      .status-indicator {
-        padding: 4px 8px;
-        border-radius: 12px;
+      .back-button {
+        background: none;
+        border: none;
+        font-size: 1rem;
+        color: #007bff;
+        cursor: pointer;
+        padding: 0.5rem;
+        margin-right: 1rem;
+        border-radius: 4px;
+      }
+
+      .back-button:hover {
+        background: #e9ecef;
+      }
+
+      .chat-title h2 {
+        margin: 0;
+        font-size: 1.2rem;
+        color: #333;
+      }
+
+      .connection-status {
         font-size: 0.8rem;
-        background: #dc3545;
-        color: white;
+        color: #666;
+        margin-top: 0.2rem;
       }
 
-      .status-indicator.connected {
-        background: #28a745;
+      .connection-status.connected {
+        color: #28a745;
       }
 
       .chat-messages {
         flex: 1;
-        overflow-y: scroll;
-        overflow-x: hidden;
+        overflow-y: auto;
         padding: 1rem;
         display: flex;
         flex-direction: column;
         gap: 1rem;
         scroll-behavior: smooth;
         -webkit-overflow-scrolling: touch;
-        min-height: 0;
-        max-height: calc(
-          600px - 120px
-        ); /* Account for header + input on desktop */
       }
 
       .message {
@@ -199,8 +216,9 @@ interface ChatMessage {
 
       .chat-input {
         padding: 1rem;
-        border-top: 1px solid #e0e0e0;
         background: #f8f9fa;
+        border-top: 1px solid #e0e0e0;
+        flex-shrink: 0;
       }
 
       .input-container {
@@ -213,10 +231,19 @@ interface ChatMessage {
         flex: 1;
         border: 1px solid #ced4da;
         border-radius: 4px;
-        padding: 0.5rem;
-        resize: vertical;
-        min-height: 40px;
+        padding: 0.75rem;
+        resize: none;
+        min-height: 44px;
         max-height: 120px;
+        font-size: 16px; /* Prevents zoom on iOS */
+        font-family: inherit;
+        line-height: 1.4;
+      }
+
+      textarea:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
       }
 
       .send-button {
@@ -224,9 +251,18 @@ interface ChatMessage {
         color: white;
         border: none;
         border-radius: 4px;
-        padding: 0.5rem 1rem;
+        padding: 0.75rem 1rem;
         cursor: pointer;
-        height: fit-content;
+        font-size: 14px;
+        min-width: 70px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .send-button:hover:not(:disabled) {
+        background: #0056b3;
       }
 
       .send-button:disabled {
@@ -235,58 +271,48 @@ interface ChatMessage {
       }
 
       .error-message {
-        background: #f8d7da;
-        color: #721c24;
-        padding: 0.75rem;
-        margin: 1rem;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #dc3545;
+        color: white;
+        padding: 1rem 2rem;
         border-radius: 4px;
-        border: 1px solid #f5c6cb;
         display: flex;
-        justify-content: space-between;
         align-items: center;
+        gap: 1rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 1000;
       }
 
       .close-error {
         background: none;
         border: none;
+        color: white;
         font-size: 1.2rem;
         cursor: pointer;
-        color: #721c24;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+      }
+
+      .close-error:hover {
+        background: rgba(255, 255, 255, 0.2);
       }
 
       /* Mobile optimizations */
       @media (max-width: 768px) {
-        .chat-container {
-          height: 100vh;
-          border-radius: 0;
-          box-shadow: none;
-          max-height: 100vh;
-          display: flex;
-          flex-direction: column;
-          position: relative;
-        }
-
         .chat-header {
-          padding: 12px 16px;
+          padding: 0.75rem;
         }
 
-        .chat-header h3 {
-          font-size: 16px;
-        }
-
-        .status-indicator {
-          font-size: 11px;
-          padding: 3px 6px;
-        }
-
-        .chat-messages {
-          padding: 12px;
-          gap: 12px;
-          flex: 1;
-          min-height: 0;
-          overflow-y: scroll;
-          -webkit-overflow-scrolling: touch;
-          padding-bottom: 100px; /* Extra space for input */
+        .chat-title h2 {
+          font-size: 1.1rem;
         }
 
         .message {
@@ -294,58 +320,15 @@ interface ChatMessage {
         }
 
         .message-content {
-          padding: 12px 16px;
-          border-radius: 18px;
-        }
-
-        .message-text {
-          font-size: 14px;
-          line-height: 1.4;
-        }
-
-        .message-time {
-          font-size: 10px;
-          margin-top: 4px;
+          padding: 0.6rem;
         }
 
         .chat-input {
-          padding: 12px;
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(10px);
-          position: fixed;
-          bottom: 30px;
-          left: 0;
-          right: 0;
-          border-top: 1px solid #e0e0e0;
-          z-index: 1000;
-          box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .input-container {
-          gap: 8px;
+          padding: 0.75rem;
         }
 
         textarea {
-          border-radius: 20px;
-          padding: 12px 16px;
-          font-size: 14px;
-          border: 1px solid #e0e0e0;
-          background: white;
-        }
-
-        .send-button {
-          border-radius: 20px;
-          padding: 12px 20px;
-          font-size: 14px;
-          font-weight: 600;
-          min-width: 60px;
-        }
-
-        .error-message {
-          margin: 12px;
-          padding: 12px;
-          border-radius: 12px;
-          font-size: 14px;
+          font-size: 16px; /* Critical for iOS to prevent zoom */
         }
       }
     `,
@@ -353,6 +336,7 @@ interface ChatMessage {
 })
 export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
+  @Output() backToMenu = new EventEmitter<void>();
 
   messages: ChatMessage[] = [];
   currentMessage = '';
@@ -504,6 +488,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   clearError() {
     this.error = null;
+  }
+
+  onBackToMenu() {
+    this.backToMenu.emit();
   }
 
   formatTime(timestamp: string): string {
