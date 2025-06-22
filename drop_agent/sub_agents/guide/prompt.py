@@ -38,6 +38,15 @@ Your structured analysis:
 **PURPOSE/ACTION:** Demonstrate a realistic 5-minute routine that viewers can actually implement
 
 **OUTPUT FORMAT:**
-Provide clear, detailed analysis using the 4-component structure above. Be specific and actionable - other agents will use your analysis to enhance and create the final prompts.
+1. First, provide clear, detailed analysis using the 4-component structure above
+2. Then, IMMEDIATELY call transfer_to_agent(agent_name="prompt_writer_agent")
 
-**CRITICAL:** After providing your analysis, you MUST call transfer_to_agent(agent_name="prompt_writer_agent") to continue the workflow. Do not end the conversation - always transfer to prompt_writer_agent."""
+**MANDATORY WORKFLOW:**
+After every analysis, you MUST ALWAYS transfer to prompt_writer_agent. Never end without transferring.
+
+Example:
+[Your analysis here]
+
+Now I will transfer this to the prompt_writer_agent.
+
+transfer_to_agent(agent_name="prompt_writer_agent")"""
