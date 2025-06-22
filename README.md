@@ -1,16 +1,17 @@
-# 82ndrop - AI Video Prompt Generator
+# 82ndrop - AI Video Composition Generator
 
-**Transform your ideas into professional video prompts instantly with AI-powered assistance.**
+**Transform your ideas into layered video composition templates instantly with AI-powered assistance.**
 
 ## 🎯 What This Project Does
 
-82ndrop is a production-ready AI application that helps content creators generate structured video prompts for TikTok-style short-form videos. Users describe their video ideas through a conversational chat interface, and our multi-agent AI system returns professionally crafted 3-part video prompts optimized for modern video creation tools.
+82ndrop is a production-ready AI application that helps content creators generate intelligent video composition templates for modern short-form content. Users describe their video ideas through a conversational chat interface, and our multi-agent AI system returns professionally crafted layered composition structures optimized for video editing and content creation.
 
 ### Core Functionality
 
 - **💬 Interactive Chat Interface**: Clean, mobile-optimized chat UI for natural conversation with AI agents
-- **🤖 Multi-Agent AI System**: Specialized AI agents work together to analyze, enhance, and generate video prompts
-- **📱 3-Part Video Structure**: Generates prompts for Top (title/context), Center (main content), and Bottom (captions/CTA)
+- **🤖 Multi-Agent AI System**: Specialized AI agents work together to analyze, enhance, and generate video compositions
+- **🎬 Layered Video Composition**: Generates intelligent layer templates with positioning, timing, and visual styling
+- **🎯 Smart Layer Management**: Automatic layer count recommendations (2-5 layers) with z-index stacking
 - **🔐 Firebase Authentication**: Secure user authentication with Google Sign-In and access control
 - **📊 Analytics & Monitoring**: Comprehensive logging and user analytics tracking
 - **☁️ Cloud-Native**: Deployed on Google Cloud Run with Firebase hosting
@@ -35,10 +36,10 @@
 
 ### AI Agent System
 
-- **Root Agent**: Orchestrates the entire video prompt generation workflow
+- **Task Master Agent**: Orchestrates the entire video composition generation workflow
 - **Guide Agent**: Analyzes and structures user ideas into video concepts
 - **Search Agent**: Enriches concepts with web research and trending topics
-- **Prompt Writer Agent**: Crafts final JSON output with top/center/bottom structure
+- **Prompt Writer Agent**: Creates intelligent layered composition templates with positioning and styling
 
 ## 🚀 Live Demo
 
@@ -48,18 +49,78 @@
 
 1. Sign in with your Google account
 2. Click "Start Creating" to open the chat interface
-3. Describe your video idea (e.g., "Create a video about morning routines")
-4. Receive structured video prompts ready for production
+3. Describe your video idea (e.g., "Create a morning routine video for busy people")
+4. Receive layered composition templates ready for video editing
+5. Copy JSON output to use in your video editing workflow
+
+## 🎬 Output Format
+
+82ndrop generates intelligent **layered video composition templates** that specify how to structure your video with multiple overlapping layers. Each layer has specific positioning, timing, and visual styling instructions.
 
 ### Example Output:
 
 ```json
 {
-  "top": "5 Game-Changing Morning Habits",
-  "center": "A person demonstrates a quick 5-minute morning routine with energetic transitions between activities",
-  "bottom": "Which habit will you try first? 💪 #MorningRoutine #Productivity"
+  "composition": {
+    "layer_count": 3,
+    "canvas_type": "vertical_short_form",
+    "total_duration": "20-30 seconds",
+    "composition_style": "layered_content"
+  },
+  "layers": [
+    {
+      "layer_id": 1,
+      "layer_type": "text_overlay",
+      "position": "top_third",
+      "content_prompt": "Create animated text: 'POV: You have 5 minutes before work'",
+      "visual_style": "bold_animated_text",
+      "duration": "full_video",
+      "z_index": 3
+    },
+    {
+      "layer_id": 2,
+      "layer_type": "main_content",
+      "position": "center_main",
+      "content_prompt": "Film quick morning routine - wake up, hydrate, set intention",
+      "visual_style": "clean_handheld_footage",
+      "duration": "full_video",
+      "z_index": 1
+    },
+    {
+      "layer_id": 3,
+      "layer_type": "caption_layer",
+      "position": "bottom_third",
+      "content_prompt": "Create caption overlay: 'What's your coffee ritual? #coffee #coffeetime'",
+      "visual_style": "subtitle_style",
+      "duration": "last_5_seconds",
+      "z_index": 2
+    }
+  ],
+  "final_video": {
+    "title": "5-Minute Morning Reset",
+    "description": "Realistic morning routine for busy people",
+    "hashtags": ["#MorningRoutine", "#ProductivityHacks", "#BusyLife"],
+    "call_to_action": "What's your morning hack?",
+    "engagement_hook": "POV: You overslept again..."
+  }
 }
 ```
+
+### Layer Types:
+
+- **main_content**: Primary filmed content (background layer)
+- **text_overlay**: Animated text, titles, hooks
+- **caption_layer**: Subtitles, captions, CTAs
+- **graphic_overlay**: Icons, animations, visual elements
+- **reaction_layer**: Picture-in-picture content
+
+### Positioning Options:
+
+- **top_third**: Upper portion of screen
+- **center_main**: Primary content area
+- **bottom_third**: Lower portion for captions
+- **floating_overlay**: Flexible positioning
+- **split_screen**: Side-by-side layouts
 
 ## 🛠️ Technical Stack
 
@@ -88,9 +149,11 @@
 ### 🤖 **Intelligent AI Workflow**
 
 - Multi-agent system with specialized roles
-- Context-aware prompt generation
+- Context-aware composition generation
 - Web search integration for trending topics
-- Structured JSON output format
+- Layered JSON composition templates
+- Smart layer count recommendations (2-5 layers)
+- Automatic z-index stacking and positioning
 
 ### 📱 **Mobile-Optimized UI**
 
@@ -194,10 +257,25 @@ python main.py
 
 ### 🎯 **Use Cases**
 
-- **Content Creators**: Generate TikTok/Instagram video prompts
-- **Marketing Teams**: Create engaging social media content ideas
-- **Educators**: Develop educational video concepts
-- **Businesses**: Generate promotional video scripts
+- **Content Creators**: Generate layered composition templates for short-form videos
+- **Video Editors**: Get structured layer plans before filming/editing
+- **Marketing Teams**: Create engaging social media content strategies
+- **Educators**: Develop educational video composition structures
+- **Businesses**: Generate promotional video layer templates
+- **Social Media Managers**: Plan multi-layer content for platforms
+
+## 🎨 **What Makes 82ndrop Unique**
+
+Unlike traditional prompt generators that give you simple text descriptions, 82ndrop creates **intelligent composition blueprints** that tell you:
+
+- **How many layers** your video should have
+- **Where to position** each element on screen
+- **What type of content** goes in each layer
+- **How long** each layer should appear
+- **Visual styling** recommendations for each layer
+- **Z-index stacking** for proper layer ordering
+
+This approach bridges the gap between having an idea and actually creating the video, giving creators a clear roadmap for their content production.
 
 ## 📊 Performance Metrics
 
