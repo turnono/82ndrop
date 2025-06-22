@@ -1,24 +1,49 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { AuthService } from '../../services/auth.service';
-import { User } from '@angular/fire/auth';
+import { RouterModule } from '@angular/router';
+import { AuthService, AuthUser } from '../../services/auth.service';
+import { ChatComponent } from '../chat/chat.component';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterModule, ChatComponent],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss'],
 })
-export class DashboardComponent implements OnInit {
-  user: User | null = null;
+export class DashboardComponent implements OnInit, OnDestroy {
+  user: AuthUser | null = null;
+  private _showChat = true; // Show chat immediately on dashboard load
 
   constructor(private authService: AuthService) {}
+
+  get showChat(): boolean {
+    return this._showChat;
+  }
+
+  set showChat(value: boolean) {
+    this._showChat = value;
+    this.updateBodyScrolling();
+  }
 
   ngOnInit() {
     this.authService.getUser().subscribe((user) => {
       this.user = user;
     });
+    this.updateBodyScrolling();
+  }
+
+  ngOnDestroy() {
+    // Re-enable scrolling when component is destroyed
+    document.body.classList.remove('no-scroll');
+  }
+
+  private updateBodyScrolling() {
+    if (this._showChat) {
+      document.body.classList.add('no-scroll');
+    } else {
+      document.body.classList.remove('no-scroll');
+    }
   }
 
   async onSignOut() {

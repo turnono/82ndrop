@@ -1,50 +1,186 @@
 import os
-import asyncio
-from dotenv import load_dotenv
+import logging
+from logging_config import APILogger
+import firebase_admin
+from firebase_admin import credentials, auth
+from fastapi import Request, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import uvicorn
+from google.adk.cli.fast_api import get_fast_api_app
 
-from drop_agent.services import get_runner
+# Initialize Firebase Admin SDK
+def initialize_firebase():
+    if not firebase_admin._apps:
+        # Try to initialize with service account key if available
+        try:
+            cred_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+            if cred_path and os.path.exists(cred_path):
+                cred = credentials.Certificate(cred_path)
+                firebase_admin.initialize_app(cred)
+                print("Firebase initialized with service account key")
+            else:
+                # Use default credentials (for Cloud Run)
+                cred = credentials.ApplicationDefault()
+                firebase_admin.initialize_app(cred)
+                print("Firebase initialized with application default credentials")
+        except Exception as e:
+            print(f"Warning: Failed to initialize Firebase Admin SDK: {e}")
+            print("Authentication will be disabled")
+            return False
+    return True
 
+# Verify Firebase ID token
+def verify_firebase_token(token: str):
+    try:
+        decoded_token = auth.verify_id_token(token)
+        return decoded_token
+    except Exception as e:
+        logger.warning(f"Token verification failed: {e}")
+        raise HTTPException(status_code=401, detail="Invalid authentication token")
 
-def main():
-    """Simple REPL to interact with the 82nDrop agent system."""
-    load_dotenv()
-    runner = get_runner()
-    user_id = "test-user"
+# Initialize Firebase and Logger
+logger = logging.getLogger(__name__)
+api_logger = APILogger()
+firebase_initialized = initialize_firebase()
 
-    # Create an async function to initialize the session
-    async def _initialize_session():
-        # This function must be async to `await` the create_session call
-        session = await runner.session_service.create_session(
-            user_id=user_id, app_name=runner.app_name
+# Get the directory where main.py is located
+AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Example session DB URL (e.g., SQLite)
+SESSION_DB_URL = "sqlite:///./sessions.db"
+# CORS allowed origins - including frontend domains
+ALLOWED_ORIGINS = [
+    "http://localhost:4200",  # Angular dev server
+    "https://82ndrop.web.app",       # Production frontend
+]
+# Set web=False to use our custom Firebase authentication instead of ADK's auth
+SERVE_WEB_INTERFACE = False
+
+# Call the function to get the FastAPI app instance
+# Ensure the agent directory name ('drop_agent') matches your agent folder
+app = get_fast_api_app(
+    agents_dir=AGENT_DIR,
+    session_service_uri=SESSION_DB_URL,
+    allow_origins=ALLOWED_ORIGINS,
+    web=SERVE_WEB_INTERFACE,
+)
+
+# Add Firebase authentication middleware
+@app.middleware("http")
+async def firebase_auth_middleware(request: Request, call_next):
+    # Allow CORS preflight requests to pass through
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    # Skip authentication for health checks and static files
+    if request.url.path in ["/", "/health", "/docs", "/openapi.json"] or request.url.path.startswith("/static"):
+        return await call_next(request)
+    
+    # Skip authentication if Firebase is not initialized (for local dev)
+    if not firebase_initialized:
+        logger.warning("Firebase not initialized, skipping authentication")
+        return await call_next(request)
+    
+    # Check for Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Authorization header required"}
         )
-        return session.id
+    
+    # Extract token from Bearer header
+    if not auth_header.startswith("Bearer "):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid authorization header format"}
+        )
+    
+    token = auth_header.split(" ")[1]
+    
+    # Verify Firebase token
+    try:
+        decoded_token = verify_firebase_token(token)
+        # Add user info to request state for use in endpoints
+        request.state.user = decoded_token
+        request.state.user_id = decoded_token.get('uid')
+        request.state.user_email = decoded_token.get('email')
+        api_logger.log_authentication(
+            user_id=decoded_token.get('uid'),
+            email=decoded_token.get('email'),
+            success=True
+        )
+    except HTTPException as e:
+        api_logger.log_authentication(
+            user_id=None,
+            email=None,
+            success=False,
+            reason=e.detail
+        )
+        return JSONResponse(
+            status_code=e.status_code,
+            content={"detail": e.detail}
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during token verification: {e}")
+        api_logger.log_authentication(
+            user_id=None,
+            email=None,
+            success=False,
+            reason=str(e)
+        )
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Authentication failed"}
+        )
+    
+    return await call_next(request)
 
-    # Run the async function to get the session_id
-    session_id = asyncio.run(_initialize_session())
+# Health check endpoint (no auth required)
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "firebase_initialized": firebase_initialized,
+        "service": "82ndrop-agent"
+    }
 
-    print("Agent is ready. Type 'exit' to quit.")
-    while True:
-        user_input = input("You: ")
-        if user_input.lower() == "exit":
-            break
+# User profile endpoint
+@app.get("/user/profile")
+async def get_user_profile(request: Request):
+    # Get user info from middleware
+    user_token = getattr(request.state, 'user', None)
+    if not user_token:
+        # This case should ideally not be reached if middleware is effective
+        raise HTTPException(status_code=401, detail="User not authenticated")
+    
+    # Extract user information and custom claims
+    uid = user_token.get('uid')
+    email = user_token.get('email')
+    name = user_token.get('name', user_token.get('display_name'))
+    
+    # Get custom claims
+    agent_access = user_token.get('agent_access', False)
+    access_level = user_token.get('access_level', 'none')
+    agent_permissions = user_token.get('agent_permissions', {})
+    
+    return {
+        "uid": uid,
+        "email": email,
+        "display_name": name,
+        "agent_access": agent_access,
+        "access_level": access_level,
+        "permissions": agent_permissions
+    }
 
-        # runner.run() is a generator, so we iterate to get the final response
-        final_response = None
-        for r in runner.run(
-            user_id=user_id,
-            session_id=session_id,
-            new_message=user_input,
-        ):
-            final_response = r
-
-        if final_response and final_response.content:
-            print(f"Agent: {final_response.content}")
-        else:
-            print("Agent: An error occurred or no response was generated.")
-
+# You can add more FastAPI routes or configurations below if needed
+# Example:
+# @app.get("/hello")
+# async def read_root():
+#     return {"Hello": "World"}
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\nExiting...")
+    # Use port 8000 to avoid conflict with Jenkins on 8080
+    logging.basicConfig(level=logging.INFO)
+    logger.info("Starting 82ndrop agent server...")
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000))) 

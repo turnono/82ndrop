@@ -1,12 +1,11 @@
 """
 Agent callbacks for the 82ndrop Agent System.
 
-These callbacks handle agent lifecycle events for monitoring,
-logging, and state management.
+These callbacks handle agent lifecycle events for monitoring and logging.
 """
 
 import logging
-from typing import Optional, Any, Dict
+from typing import Optional, Any
 from datetime import datetime
 
 try:
@@ -21,85 +20,142 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def before_agent_callback(callback_context: CallbackContext) -> Optional[types.Content]:
+def before_agent_callback(callback_context: CallbackContext) -> None:
     """
-    Callback executed before the agent starts processing a request.
-
-    This callback is called at the start of each agent interaction.
-    Use this for logging, metrics collection, and preparing context.
-
-    Args:
-        callback_context: Context object containing request information
-
-    Returns:
-        Optional content to inject into the conversation
+    Before agent callback - logs the start of agent processing
     """
     try:
-        # Log the start of agent processing
-        logger.info("Agent processing started")
-
-        # Extract session and user info if available
-        session_id = getattr(callback_context, "session_id", "unknown")
-        user_id = getattr(callback_context, "user_id", "unknown")
-
-        logger.info(f"Processing request for user: {user_id}, session: {session_id}")
-
-        # Add timestamp for performance tracking
-        if hasattr(callback_context, "state"):
-            callback_context.state["processing_start_time"] = datetime.now().isoformat()
-
+        logger.info("🚀 Agent processing started")
+        
+        # Add CORS headers to the response if available
+        if hasattr(callback_context, 'response_headers'):
+            callback_context.response_headers.update({
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+                'Access-Control-Max-Age': '86400'
+            })
+        
+        # Store start time for performance monitoring (as timestamp for JSON serialization)
+        callback_context.state["start_time"] = datetime.now().timestamp()
+        
     except Exception as e:
         logger.error(f"Error in before_agent_callback: {e}")
 
-    # Note: We do set processing_start_time here for performance tracking
-    # This is a minimal state modification for monitoring purposes
-    return None
 
-
-def after_agent_callback(callback_context: CallbackContext) -> Optional[types.Content]:
+def after_agent_callback(callback_context: CallbackContext) -> None:
     """
-    Callback executed after the agent completes processing a request.
-
-    This callback is called after the agent generates a response.
-    Use this for logging, metrics, state persistence, and cleanup.
-
-    Args:
-        callback_context: Context object containing response and state information
-
-    Returns:
-        Optional content to append to the response
+    After agent callback - logs completion and performance metrics
     """
     try:
-        # Log the completion of agent processing
-        logger.info("Agent processing completed")
-
-        # Calculate processing time if start time was recorded
-        if (
-            hasattr(callback_context, "state")
-            and "processing_start_time" in callback_context.state
-        ):
-            start_time = datetime.fromisoformat(
-                callback_context.state["processing_start_time"]
-            )
-            duration = (datetime.now() - start_time).total_seconds()
-            logger.info(f"Agent processing duration: {duration:.2f} seconds")
-
-            # Store metrics in state
-            callback_context.state["last_processing_duration"] = duration
-
-        # Extract session and user info for logging
-        session_id = getattr(callback_context, "session_id", "unknown")
-        user_id = getattr(callback_context, "user_id", "unknown")
-
-        logger.info(f"Completed processing for user: {user_id}, session: {session_id}")
-
-        # Here you could add additional functionality like:
-        # - Updating user conversation history
-        # - Storing metrics to analytics systems
-        # - Triggering follow-up actions
-        # - Updating user preferences based on interaction
-
+        start_time_timestamp = callback_context.state.get("start_time")
+        if start_time_timestamp:
+            duration = datetime.now().timestamp() - start_time_timestamp
+            logger.info(f"✅ Agent processing completed in {duration:.2f}s")
+        else:
+            logger.info("✅ Agent processing completed")
+            
     except Exception as e:
         logger.error(f"Error in after_agent_callback: {e}")
 
-    return None
+
+def before_model_callback(callback_context: CallbackContext) -> Optional[types.Content]:
+    """
+    Called before the model is invoked.
+    
+    Args:
+        callback_context: Context containing request and session information
+        
+    Returns:
+        Optional content to inject before model invocation
+    """
+    try:
+        logger.info("🤖 Before model callback triggered")
+        
+        # Check if user is authenticated from the before_agent_callback
+        if not callback_context.state.get("authenticated", False):
+            logger.warning("Model callback called for unauthenticated user")
+            return None
+            
+        user_info = callback_context.state.get("user_info", {})
+        logger.info(f"Model callback for user: {user_info.get('uid', 'unknown')}")
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error in before_model_callback: {e}")
+        return None
+
+
+def after_model_callback(callback_context: CallbackContext) -> Optional[types.Content]:
+    """
+    Called after the model has been invoked.
+    
+    Args:
+        callback_context: Context containing request, session, and model response information
+        
+    Returns:
+        Optional content to inject after model invocation
+    """
+    try:
+        logger.info("🤖 After model callback triggered")
+        
+        user_info = callback_context.state.get("user_info", {})
+        logger.info(f"Model response processed for user: {user_info.get('uid', 'unknown')}")
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error in after_model_callback: {e}")
+        return None
+
+
+def before_tool_callback(callback_context: CallbackContext) -> Optional[types.Content]:
+    """
+    Called before a tool is executed.
+    
+    Args:
+        callback_context: Context containing request and tool information
+        
+    Returns:
+        Optional content to inject before tool execution
+    """
+    try:
+        logger.info("🔧 Before tool callback triggered")
+        
+        # Check if user is authenticated
+        if not callback_context.state.get("authenticated", False):
+            logger.warning("Tool callback called for unauthenticated user")
+            return None
+            
+        user_info = callback_context.state.get("user_info", {})
+        logger.info(f"Tool execution for user: {user_info.get('uid', 'unknown')}")
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error in before_tool_callback: {e}")
+        return None
+
+
+def after_tool_callback(callback_context: CallbackContext) -> Optional[types.Content]:
+    """
+    Called after a tool has been executed.
+    
+    Args:
+        callback_context: Context containing request, tool, and execution information
+        
+    Returns:
+        Optional content to inject after tool execution
+    """
+    try:
+        logger.info("🔧 After tool callback triggered")
+        
+        user_info = callback_context.state.get("user_info", {})
+        logger.info(f"Tool execution completed for user: {user_info.get('uid', 'unknown')}")
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error in after_tool_callback: {e}")
+        return None

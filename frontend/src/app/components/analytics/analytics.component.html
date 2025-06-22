@@ -1,0 +1,162 @@
+<div class="analytics-container">
+    <div class="analytics-header">
+        <h1>Analytics Dashboard</h1>
+        <button *ngIf="isAdmin" class="export-btn" (click)="exportAnalytics()">
+            Export Data
+        </button>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="loading" class="loading">
+        <div class="spinner"></div>
+        <p>Loading analytics...</p>
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="error" class="error">
+        <p>{{ error }}</p>
+        <button (click)="loadAnalytics()">Retry</button>
+    </div>
+
+    <!-- Analytics Content -->
+    <div *ngIf="!loading && !error && analytics" class="analytics-content">
+
+        <!-- User Statistics -->
+        <div class="stats-section">
+            <h2>Your Usage Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{{ analytics.user_stats.total_requests }}</div>
+                    <div class="stat-label">Total Requests</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-value">{{ analytics.user_stats.total_chat_messages }}</div>
+                    <div class="stat-label">Chat Messages</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-value">{{ formatTime(analytics.user_stats.avg_response_time) }}</div>
+                    <div class="stat-label">Avg Response Time</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-value">{{ formatPercentage(analytics.user_stats.success_rate) }}</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+            </div>
+
+            <div class="user-details">
+                <div class="detail-row">
+                    <span class="label">Access Level:</span>
+                    <span class="access-level" [style.color]="getAccessLevelColor(analytics.user_stats.access_level)">
+                        {{ analytics.user_stats.access_level | titlecase }}
+                    </span>
+                </div>
+
+                <div class="detail-row">
+                    <span class="label">Member Since:</span>
+                    <span>{{ formatDate(analytics.user_stats.first_seen) }}</span>
+                </div>
+
+                <div class="detail-row">
+                    <span class="label">Last Active:</span>
+                    <span>{{ formatDate(analytics.user_stats.last_seen) }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Daily Statistics -->
+        <div *ngIf="isAdmin && analytics.daily_stats" class="stats-section">
+            <h2>Today's System Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{{ analytics.daily_stats.total_requests }}</div>
+                    <div class="stat-label">Total Requests</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-value">{{ analytics.daily_stats.unique_users }}</div>
+                    <div class="stat-label">Active Users</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-value">{{ analytics.daily_stats.chat_messages }}</div>
+                    <div class="stat-label">Chat Messages</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-value">{{ formatTime(analytics.daily_stats.avg_response_time) }}</div>
+                    <div class="stat-label">Avg Response Time</div>
+                </div>
+            </div>
+
+            <div class="access-levels">
+                <h3>Users by Access Level</h3>
+                <div class="access-level-chart">
+                    <div *ngFor="let level of getAccessLevels()" class="access-level-bar">
+                        <div class="level-label">{{ level.name | titlecase }}</div>
+                        <div class="level-bar">
+                            <div class="level-fill" [style.width.%]="level.percentage"
+                                [style.background-color]="getAccessLevelColor(level.name)"></div>
+                        </div>
+                        <div class="level-count">{{ level.count }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Usage Insights -->
+        <div class="stats-section">
+            <h2>Usage Insights</h2>
+            <div class="insights">
+                <div class="insight-card">
+                    <h4>Performance</h4>
+                    <p *ngIf="analytics.user_stats.avg_response_time != null && analytics.user_stats.avg_response_time < 1000"
+                        class="positive">
+                        🚀 Great! Your average response time is excellent.
+                    </p>
+                    <p *ngIf="analytics.user_stats.avg_response_time != null && analytics.user_stats.avg_response_time >= 1000"
+                        class="neutral">
+                        ⏱️ Your average response time is {{ formatTime(analytics.user_stats.avg_response_time) }}.
+                    </p>
+                    <p *ngIf="analytics.user_stats.avg_response_time == null" class="neutral">
+                        ⏱️ No response time data available yet.
+                    </p>
+                </div>
+
+                <div class="insight-card">
+                    <h4>Reliability</h4>
+                    <p *ngIf="analytics.user_stats.success_rate != null && analytics.user_stats.success_rate > 0.95"
+                        class="positive">
+                        ✅ Excellent success rate! Most of your requests complete successfully.
+                    </p>
+                    <p *ngIf="analytics.user_stats.success_rate != null && analytics.user_stats.success_rate <= 0.95"
+                        class="warning">
+                        ⚠️ Success rate: {{ formatPercentage(analytics.user_stats.success_rate) }}. Some requests may be
+                        failing.
+                    </p>
+                    <p *ngIf="analytics.user_stats.success_rate == null" class="neutral">
+                        ⚠️ No success rate data available yet.
+                    </p>
+                </div>
+
+                <div class="insight-card">
+                    <h4>Activity</h4>
+                    <p *ngIf="analytics.user_stats.total_chat_messages > 50" class="positive">
+                        💬 You're an active user with {{ analytics.user_stats.total_chat_messages }} messages!
+                    </p>
+                    <p *ngIf="analytics.user_stats.total_chat_messages <= 50" class="neutral">
+                        💬 You've sent {{ analytics.user_stats.total_chat_messages }} messages so far.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- No Data State -->
+    <div *ngIf="!loading && !error && !analytics" class="no-data">
+        <p>No analytics data available yet.</p>
+        <p>Start using the agent to see your statistics!</p>
+    </div>
+</div>

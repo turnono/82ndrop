@@ -54,3 +54,6 @@ deployment/
 evals/callback_eval_report_*.json
 .ruff_cache/
 evals/*.json
+cloud-functions/node_modules/
+api/logs/
+logs/
