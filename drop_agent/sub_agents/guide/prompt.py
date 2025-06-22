@@ -40,4 +40,4 @@ Your structured analysis:
 **OUTPUT FORMAT:**
 Provide clear, detailed analysis using the 4-component structure above. Be specific and actionable - other agents will use your analysis to enhance and create the final prompts.
 
-**REMEMBER:** You're the foundation specialist. Focus on thorough analysis, not workflow coordination."""
+**CRITICAL:** After providing your analysis, you MUST call transfer_to_agent(agent_name="prompt_writer_agent") to continue the workflow. Do not end the conversation - always transfer to prompt_writer_agent."""
