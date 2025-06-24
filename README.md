@@ -55,16 +55,31 @@
 
 ## 🎬 Output Format
 
-82ndrop generates intelligent **layered video composition templates** that specify how to structure your video with multiple overlapping layers. Each layer has specific positioning, timing, and visual styling instructions.
+82ndrop generates intelligent **vertical layered video composition templates** specifically optimized for TikTok, Instagram Reels, and YouTube Shorts. Each template specifies how to structure your video with multiple overlapping layers in 9:16 (vertical) format with mobile-optimized positioning, timing, and visual styling.
+
+### 📱 **Vertical-First Design:**
+
+- **Automatic Vertical Format**: All videos default to 9:16 aspect ratio (TikTok/mobile standard)
+- **Mobile Optimization**: Elements sized and positioned for phone screens
+- **TikTok Standards**: Follows platform best practices for engagement
+- **Portrait Framing**: Every composition assumes vertical orientation
+
+### Enhanced Features:
+
+- **🎭 Dialogue Sequences**: Support for multi-character conversations with vertical timing
+- **⏰ Precise Mobile Timing**: Text overlays synchronized with dialogue for mobile attention spans
+- **📍 Vertical Positioning**: top_third, middle_third, center_main, bottom_third optimized for 9:16
+- **🎥 TikTok-Style Compositions**: 3-5 layers with proper z-index stacking for mobile
+- **🎙️ Mobile Podcast Content**: Vertical speakers with camera cuts optimized for portrait viewing
 
 ### Example Output:
 
 ```json
 {
   "composition": {
-    "layer_count": 3,
+    "layer_count": 4,
     "canvas_type": "vertical_short_form",
-    "total_duration": "20-30 seconds",
+    "total_duration": "8 seconds",
     "composition_style": "layered_content"
   },
   "layers": [
@@ -72,36 +87,78 @@
       "layer_id": 1,
       "layer_type": "text_overlay",
       "position": "top_third",
-      "content_prompt": "Create animated text: 'POV: You have 5 minutes before work'",
-      "visual_style": "bold_animated_text",
+      "content_prompt": "Show the text \"One-Eyed Gorilla Podcast\"",
+      "visual_style": "retro-futuristic glowing text",
       "duration": "full_video",
-      "z_index": 3
+      "z_index": 4
     },
     {
       "layer_id": 2,
       "layer_type": "main_content",
       "position": "center_main",
-      "content_prompt": "Film quick morning routine - wake up, hydrate, set intention",
-      "visual_style": "clean_handheld_footage",
+      "content_prompt": "Film three funky gorillas with hippy jewelry sitting around a round stone podcast table with glowing primitive microphones",
+      "visual_style": "stylized Joe Rogan-style podcast in Stone Age setting",
       "duration": "full_video",
-      "z_index": 1
+      "z_index": 1,
+      "dialogue_sequence": [
+        {
+          "speaker": "tall_gorilla",
+          "voice": "raspy",
+          "text": "They say he landed with nothing…",
+          "timing": "0-2s"
+        },
+        {
+          "speaker": "short_spiky_gorilla",
+          "voice": "excited",
+          "text": "…but left a trail of awakened minds.",
+          "timing": "2-4s"
+        },
+        {
+          "speaker": "medium_gorilla",
+          "voice": "low_and_slow",
+          "text": "He made the choice… when others followed instinct.",
+          "timing": "4-6s"
+        },
+        {
+          "speaker": "all_three",
+          "voice": "soft_whisper",
+          "text": "That's what made him the upgrade.",
+          "timing": "6-8s"
+        }
+      ]
     },
     {
       "layer_id": 3,
+      "layer_type": "text_overlay",
+      "position": "middle_third",
+      "content_prompt": "Show the line \"The brown one made a choice.\"",
+      "visual_style": "retro-futuristic glowing text",
+      "duration": "2.5 seconds",
+      "timing": "4-6.5s",
+      "z_index": 3
+    },
+    {
+      "layer_id": 4,
       "layer_type": "caption_layer",
       "position": "bottom_third",
-      "content_prompt": "Create caption overlay: 'What's your coffee ritual? #coffee #coffeetime'",
-      "visual_style": "subtitle_style",
-      "duration": "last_5_seconds",
+      "content_prompt": "Show \"Not strength. Not instinct. Choice.\"",
+      "visual_style": "subtitle_style_glowing",
+      "duration": "full_video",
       "z_index": 2
     }
   ],
   "final_video": {
-    "title": "5-Minute Morning Reset",
-    "description": "Realistic morning routine for busy people",
-    "hashtags": ["#MorningRoutine", "#ProductivityHacks", "#BusyLife"],
-    "call_to_action": "What's your morning hack?",
-    "engagement_hook": "POV: You overslept again..."
+    "title": "One-Eyed Gorilla Podcast - The Upgrade",
+    "description": "What makes the One-Eyed Gorilla different? Not strength. Not instinct. Choice.",
+    "hashtags": [
+      "#podcast",
+      "#gorilla",
+      "#stoneage",
+      "#retrofuture",
+      "#choice"
+    ],
+    "call_to_action": "Tune in for full episodes!",
+    "engagement_hook": "They say he landed with nothing…"
   }
 }
 ```
@@ -116,11 +173,21 @@
 
 ### Positioning Options:
 
-- **top_third**: Upper portion of screen
-- **center_main**: Primary content area
-- **bottom_third**: Lower portion for captions
-- **floating_overlay**: Flexible positioning
+- **top_third**: Upper portion of screen (titles, headers)
+- **middle_third**: Middle portion of screen (mid-video text overlays)
+- **center_main**: Primary content area (main video content)
+- **bottom_third**: Lower portion for captions and subtitles
+- **floating_overlay**: Flexible positioning anywhere on screen
 - **split_screen**: Side-by-side layouts
+- **full_screen**: Takes entire canvas
+
+### Dialogue Support:
+
+When your video includes dialogue, the system automatically generates:
+
+- **dialogue_sequence**: Array with speaker, voice, text, and timing
+- **timing**: Precise synchronization with text overlays
+- **speaker_details**: Character identification and voice characteristics
 
 ## 🛠️ Technical Stack
 

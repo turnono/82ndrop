@@ -16,7 +16,8 @@
             </div>
 
             <!-- Center Plus Button -->
-            <button class="center-plus-button" (click)="startNewSession()" title="Start New Session">
+            <button class="center-plus-button" (click)="startNewSession()" (mousedown)="onButtonMouseDown()"
+                title="Start New Session">
                 <span class="plus-icon">+</span>
             </button>
 
@@ -48,7 +49,7 @@
     <main class="dashboard-main" [class.full-screen]="showChat">
         <!-- Chat Interface - Full Featured -->
         <div class="chat-container" *ngIf="showChat">
-            <app-chat (backToMenu)="showChat = false"></app-chat>
+            <app-chat #chatComponent (backToMenu)="showChat = false"></app-chat>
         </div>
 
         <!-- Landing View -->
