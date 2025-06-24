@@ -698,8 +698,9 @@
   }
 
   .chat-container {
-    height: calc(100vh - 70px);
+    height: calc(100vh - 120px); // Better mobile height calculation
     border-radius: 8px;
+    margin: 0 4px; // Prevent edge cutoff
   }
 
   .hero-section {
@@ -796,6 +797,7 @@
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 100;
 
   &:hover {
     border-color: #667eea;
@@ -815,5 +817,174 @@
 
   &:hover .plus-icon {
     color: #667eea;
+  }
+}
+
+// Mobile session menu button (only visible on mobile when chat is shown)
+.mobile-session-btn {
+  display: none;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: 2px solid #6c757d;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+
+  .session-icon {
+    color: #6c757d;
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  &:hover {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.1);
+
+    .session-icon {
+      color: #667eea;
+    }
+  }
+}
+
+// Mobile session overlay
+.mobile-session-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 60px;
+
+  .mobile-session-content {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 400px;
+    max-height: 80vh;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+
+    .mobile-session-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid #e9ecef;
+      background: #f8f9fa;
+
+      h3 {
+        margin: 0;
+        color: #333;
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      .close-btn {
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: #6c757d;
+        cursor: pointer;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        transition: all 0.2s;
+
+        &:hover {
+          background: #e9ecef;
+          color: #333;
+        }
+      }
+    }
+
+    app-session-history {
+      display: block;
+      height: 400px;
+      overflow-y: auto;
+    }
+  }
+}
+
+// Chat layout with session history
+.chat-layout {
+  display: flex;
+  height: 100%;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+}
+
+.session-sidebar {
+  width: 300px;
+  height: 100%;
+  flex-shrink: 0;
+  border-right: 1px solid #e9ecef;
+}
+
+.chat-container {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+// Mobile responsive chat layout
+@media (max-width: 1024px) {
+  .session-sidebar {
+    width: 250px;
+  }
+}
+
+@media (max-width: 768px) {
+  .mobile-session-btn {
+    display: flex; // Show mobile session button on tablets and phones
+  }
+
+  .chat-layout {
+    border-radius: 8px;
+  }
+
+  .session-sidebar {
+    display: none; // Hide sidebar on mobile - use overlay/drawer approach instead
+  }
+
+  .chat-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  .chat-section {
+    .section-header {
+      padding: 12px 16px;
+
+      h2 {
+        font-size: 16px;
+      }
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .chat-layout {
+    margin: 0 8px;
+    border-radius: 12px;
+  }
+
+  .chat-container {
+    height: calc(100vh - 140px); // Account for header and padding
   }
 }

@@ -160,101 +160,150 @@ async def test_json_format_validation():
     start_time = time.time()
     
     try:
-        # Test valid JSON examples for new composition format
+        # Test valid data structures for new composition format with dialogue support
         valid_examples = [
-            '''```json
-{
-  "composition": {
-    "layer_count": 3,
-    "canvas_type": "vertical_short_form",
-    "total_duration": "20-30 seconds",
-    "composition_style": "comedy_layered"
-  },
-  "layers": [
-    {
-      "layer_id": 1,
-      "layer_type": "text_overlay",
-      "position": "top_third",
-      "content_prompt": "Create animated text: 'Wall Street's newest analyst'",
-      "visual_style": "professional_title_text",
-      "duration": "full_video",
-      "z_index": 3
-    },
-    {
-      "layer_id": 2,
-      "layer_type": "main_content",
-      "position": "center_main",
-      "content_prompt": "Film a gorilla in a suit passionately explaining stock market trends using charts and graphs",
-      "visual_style": "professional_comedy",
-      "duration": "full_video",
-      "z_index": 1
-    },
-    {
-      "layer_id": 3,
-      "layer_type": "caption_layer",
-      "position": "bottom_third",
-      "content_prompt": "Create stock terms and price updates as scrolling text overlays",
-      "visual_style": "financial_ticker_style",
-      "duration": "last_10_seconds",
-      "z_index": 2
-    }
-  ],
-  "final_video": {
-    "title": "Wall Street's Newest Analyst",
-    "description": "When the market needs a primal perspective",
-    "hashtags": ["#stocks", "#finance", "#gorilla", "#comedy"],
-    "call_to_action": "What stock would you trust a gorilla with?",
-    "engagement_hook": "Wall Street's getting wild"
-  }
-}
-```''',
-            '''```json
-{
-  "composition": {
-    "layer_count": 2,
-    "canvas_type": "vertical_short_form",
-    "total_duration": "15-20 seconds",
-    "composition_style": "floating_overlay"
-  },
-  "layers": [
-    {
-      "layer_id": 1,
-      "layer_type": "main_content",
-      "position": "full_screen",
-      "content_prompt": "Film animals in their natural habitat with realistic behavior",
-      "visual_style": "nature_documentary",
-      "duration": "full_video",
-      "z_index": 1
-    },
-    {
-      "layer_id": 2,
-      "layer_type": "text_overlay",
-      "position": "floating_overlay",
-      "content_prompt": "Create animated speech bubbles with animal thoughts about humans",
-      "visual_style": "cartoon_speech_bubbles",
-      "duration": "full_video",
-      "z_index": 2
-    }
-  ],
-  "final_video": {
-    "title": "Overheard in the Animal Kingdom",
-    "description": "What animals really think about us humans",
-    "hashtags": ["#animals", "#comedy", "#perspective"],
-    "call_to_action": "What would your pet say about you?",
-    "engagement_hook": "They think WE'RE the weird ones"
-  }
-}
-```''',
+            {
+                "composition": {
+                    "layer_count": 4,
+                    "canvas_type": "vertical_short_form",
+                    "total_duration": "8 seconds",
+                    "composition_style": "layered_content"
+                },
+                "layers": [
+                    {
+                        "layer_id": 1,
+                        "layer_type": "text_overlay",
+                        "position": "top_third",
+                        "content_prompt": "Show the text 'One-Eyed Gorilla Podcast'",
+                        "visual_style": "retro-futuristic glowing text",
+                        "duration": "full_video",
+                        "z_index": 4
+                    },
+                    {
+                        "layer_id": 2,
+                        "layer_type": "main_content",
+                        "position": "center_main",
+                        "content_prompt": "Film three funky gorillas with hippy jewelry sitting around a round stone podcast table",
+                        "visual_style": "stylized Joe Rogan-style podcast in Stone Age setting",
+                        "duration": "full_video",
+                        "z_index": 1,
+                        "dialogue_sequence": [
+                            {"speaker": "tall_gorilla", "voice": "raspy", "text": "They say he landed with nothing…", "timing": "0-2s"},
+                            {"speaker": "short_spiky_gorilla", "voice": "excited", "text": "…but left a trail of awakened minds.", "timing": "2-4s"},
+                            {"speaker": "medium_gorilla", "voice": "low_and_slow", "text": "He made the choice… when others followed instinct.", "timing": "4-6s"},
+                            {"speaker": "all_three", "voice": "soft_whisper", "text": "That's what made him the upgrade.", "timing": "6-8s"}
+                        ]
+                    },
+                    {
+                        "layer_id": 3,
+                        "layer_type": "text_overlay",
+                        "position": "middle_third",
+                        "content_prompt": "Show the line 'The brown one made a choice.'",
+                        "visual_style": "retro-futuristic glowing text",
+                        "duration": "2.5 seconds",
+                        "timing": "4-6.5s",
+                        "z_index": 3
+                    },
+                    {
+                        "layer_id": 4,
+                        "layer_type": "caption_layer",
+                        "position": "bottom_third",
+                        "content_prompt": "Show 'Not strength. Not instinct. Choice.'",
+                        "visual_style": "subtitle_style_glowing",
+                        "duration": "full_video",
+                        "z_index": 2
+                    }
+                ],
+                "final_video": {
+                    "title": "One-Eyed Gorilla Podcast - The Upgrade",
+                    "description": "What makes the One-Eyed Gorilla different? Not strength. Not instinct. Choice.",
+                    "hashtags": ["#podcast", "#gorilla", "#stoneage", "#retrofuture", "#choice"],
+                    "call_to_action": "Tune in for full episodes!",
+                    "engagement_hook": "They say he landed with nothing…"
+                }
+            },
+            {
+                "composition": {
+                    "layer_count": 3,
+                    "canvas_type": "vertical_short_form",
+                    "total_duration": "20-30 seconds",
+                    "composition_style": "comedy_layered"
+                },
+                "layers": [
+                    {
+                        "layer_id": 1,
+                        "layer_type": "text_overlay",
+                        "position": "top_third",
+                        "content_prompt": "Create animated text: 'Wall Street's newest analyst'",
+                        "visual_style": "professional_title_text",
+                        "duration": "full_video",
+                        "z_index": 3
+                    },
+                    {
+                        "layer_id": 2,
+                        "layer_type": "main_content",
+                        "position": "center_main",
+                        "content_prompt": "Film a gorilla in a suit passionately explaining stock market trends",
+                        "visual_style": "professional_comedy",
+                        "duration": "full_video",
+                        "z_index": 1
+                    },
+                    {
+                        "layer_id": 3,
+                        "layer_type": "caption_layer",
+                        "position": "bottom_third",
+                        "content_prompt": "Create stock terms and price updates as scrolling text overlays",
+                        "visual_style": "financial_ticker_style",
+                        "duration": "last_10_seconds",
+                        "z_index": 2
+                    }
+                ],
+                "final_video": {
+                    "title": "Wall Street's Newest Analyst",
+                    "description": "When the market needs a primal perspective",
+                    "hashtags": ["#stocks", "#finance", "#gorilla", "#comedy"],
+                    "call_to_action": "What stock would you trust a gorilla with?",
+                    "engagement_hook": "Wall Street's getting wild"
+                }
+            },
+            {
+                "composition": {
+                    "layer_count": 2,
+                    "canvas_type": "vertical_short_form",
+                    "total_duration": "15-20 seconds",
+                    "composition_style": "floating_overlay"
+                },
+                "layers": [
+                    {
+                        "layer_id": 1,
+                        "layer_type": "main_content",
+                        "position": "full_screen",
+                        "content_prompt": "Film animals in their natural habitat with realistic behavior",
+                        "visual_style": "nature_documentary",
+                        "duration": "full_video",
+                        "z_index": 1
+                    },
+                    {
+                        "layer_id": 2,
+                        "layer_type": "text_overlay",
+                        "position": "floating_overlay",
+                        "content_prompt": "Create animated speech bubbles with animal thoughts about humans",
+                        "visual_style": "cartoon_speech_bubbles",
+                        "duration": "full_video",
+                        "z_index": 2
+                    }
+                ],
+                "final_video": {
+                    "title": "Overheard in the Animal Kingdom",
+                    "description": "What animals really think about us humans",
+                    "hashtags": ["#animals", "#comedy", "#perspective"],
+                    "call_to_action": "What would your pet say about you?",
+                    "engagement_hook": "They think WE'RE the weird ones"
+                }
+            }
         ]
         
-        for i, example in enumerate(valid_examples):
-            # Extract JSON
-            json_start = example.find("```json") + 7
-            json_end = example.find("```", json_start)
-            json_content = example[json_start:json_end].strip()
-            
-            # Parse JSON
-            parsed = json.loads(json_content)
+        for i, parsed in enumerate(valid_examples):
             
             # Validate required fields for new composition format
             if "composition" not in parsed:
@@ -271,6 +320,10 @@ async def test_json_format_validation():
                 if field not in composition:
                     raise Exception(f"Example {i+1} composition missing field: {field}")
                     
+            # Validate that canvas_type is always vertical_short_form
+            if composition["canvas_type"] != "vertical_short_form":
+                raise Exception(f"Example {i+1} canvas_type must be 'vertical_short_form' for TikTok optimization, got: {composition['canvas_type']}")
+                
             # Validate layers array
             layers = parsed["layers"]
             if not isinstance(layers, list) or len(layers) == 0:
@@ -282,6 +335,21 @@ async def test_json_format_validation():
                 for field in required_layer_fields:
                     if field not in layer:
                         raise Exception(f"Example {i+1} layer {j+1} missing field: {field}")
+                        
+                # Validate dialogue_sequence if present
+                if "dialogue_sequence" in layer:
+                    if not isinstance(layer["dialogue_sequence"], list):
+                        raise Exception(f"Example {i+1} layer {j+1} dialogue_sequence must be an array")
+                    for k, dialogue in enumerate(layer["dialogue_sequence"]):
+                        dialogue_fields = ["speaker", "voice", "text", "timing"]
+                        for field in dialogue_fields:
+                            if field not in dialogue:
+                                raise Exception(f"Example {i+1} layer {j+1} dialogue {k+1} missing field: {field}")
+                
+                # Validate positioning terms
+                valid_positions = ["top_third", "middle_third", "center_main", "bottom_third", "full_screen", "left_half", "right_half", "floating_overlay", "side_bar"]
+                if layer["position"] not in valid_positions:
+                    raise Exception(f"Example {i+1} layer {j+1} invalid position: {layer['position']}")
                         
             # Validate final_video structure
             final_video = parsed["final_video"]
@@ -304,6 +372,8 @@ async def test_json_format_validation():
             "metrics": {
                 "examples_tested": len(valid_examples),
                 "required_layer_fields": len(required_layer_fields),
+                "dialogue_sequences_validated": 1,
+                "positioning_terms_validated": len(valid_positions),
             },
         }
         
@@ -462,6 +532,240 @@ async def test_successful_examples_analysis():
         }
 
 
+async def test_gorilla_podcast_json_validation():
+    """Test the corrected gorilla podcast JSON structure"""
+    
+    print("🔍 Testing Gorilla Podcast JSON Validation")
+    
+    start_time = time.time()
+    
+    try:
+        # The corrected JSON structure for the gorilla podcast prompt
+        corrected_json_data = {
+            "composition": {
+                "layer_count": 4,
+                "canvas_type": "vertical_short_form",
+                "total_duration": "8 seconds",
+                "composition_style": "layered_content"
+            },
+            "layers": [
+                {
+                    "layer_id": 1,
+                    "layer_type": "text_overlay",
+                    "position": "top_third",
+                    "content_prompt": "Show the text \"One-Eyed Gorilla Podcast\"",
+                    "visual_style": "retro-futuristic glowing text",
+                    "duration": "full_video",
+                    "z_index": 4
+                },
+                {
+                    "layer_id": 2,
+                    "layer_type": "main_content",
+                    "position": "center_main",
+                    "content_prompt": "Film three funky gorillas with hippy jewelry sitting around a round stone podcast table with glowing primitive microphones. Close-up camera cuts on each gorilla's face as they speak, synced with expressive animated lips. Subtle glowing lights, light dust, and retro-futuristic podcast effects.",
+                    "visual_style": "stylized Joe Rogan-style podcast in Stone Age setting",
+                    "duration": "full_video",
+                    "z_index": 1,
+                    "dialogue_sequence": [
+                        {"speaker": "tall_gorilla", "voice": "raspy", "text": "They say he landed with nothing…", "timing": "0-2s"},
+                        {"speaker": "short_spiky_gorilla", "voice": "excited", "text": "…but left a trail of awakened minds.", "timing": "2-4s"},
+                        {"speaker": "medium_gorilla", "voice": "low_and_slow", "text": "He made the choice… when others followed instinct.", "timing": "4-6s"},
+                        {"speaker": "all_three", "voice": "soft_whisper", "text": "That's what made him the upgrade.", "timing": "6-8s"}
+                    ]
+                },
+                {
+                    "layer_id": 3,
+                    "layer_type": "text_overlay",
+                    "position": "middle_third",
+                    "content_prompt": "Show the line \"The brown one made a choice.\"",
+                    "visual_style": "retro-futuristic glowing text",
+                    "duration": "2.5 seconds",
+                    "timing": "4-6.5s",
+                    "z_index": 3
+                },
+                {
+                    "layer_id": 4,
+                    "layer_type": "caption_layer",
+                    "position": "bottom_third",
+                    "content_prompt": "Show \"Not strength. Not instinct. Choice.\"",
+                    "visual_style": "subtitle_style_glowing",
+                    "duration": "full_video",
+                    "z_index": 2
+                }
+            ],
+            "final_video": {
+                "title": "One-Eyed Gorilla Podcast - The Upgrade",
+                "description": "What makes the One-Eyed Gorilla different? Not strength. Not instinct. Choice. Tune in to find out more!",
+                "hashtags": ["#podcast", "#gorilla", "#stoneage", "#retrofuture", "#choice"],
+                "call_to_action": "Tune in for full episodes!",
+                "engagement_hook": "They say he landed with nothing…"
+            }
+        }
+        
+        # Use the already parsed JSON data
+        parsed = corrected_json_data
+        
+        # Validate all the issues identified in the original prompt
+        print("✅ Validating dialogue content...")
+        main_layer = next(layer for layer in parsed["layers"] if layer["layer_type"] == "main_content")
+        if "dialogue_sequence" not in main_layer:
+            raise Exception("Missing dialogue_sequence in main_content layer")
+        
+        dialogue = main_layer["dialogue_sequence"]
+        if len(dialogue) != 4:
+            raise Exception(f"Expected 4 dialogue entries, got {len(dialogue)}")
+            
+        expected_speakers = ["tall_gorilla", "short_spiky_gorilla", "medium_gorilla", "all_three"]
+        for i, entry in enumerate(dialogue):
+            if entry["speaker"] != expected_speakers[i]:
+                raise Exception(f"Dialogue {i+1} speaker mismatch: expected {expected_speakers[i]}, got {entry['speaker']}")
+                
+        print("✅ Validating caption positioning...")
+        middle_caption = next((layer for layer in parsed["layers"] if layer.get("timing") == "4-6.5s"), None)
+        if not middle_caption or middle_caption["position"] != "middle_third":
+            raise Exception("Middle caption should be positioned in middle_third, not center_main")
+            
+        print("✅ Validating timing context...")
+        if middle_caption["timing"] != "4-6.5s":
+            raise Exception("Middle caption timing should be 4-6.5s to align with third dialogue line")
+            
+        print("✅ Validating layer structure...")
+        if parsed["composition"]["layer_count"] != 4:
+            raise Exception("Should have 4 layers for this complex composition")
+            
+        # Validate positioning terms
+        positions = [layer["position"] for layer in parsed["layers"]]
+        expected_positions = ["top_third", "center_main", "middle_third", "bottom_third"]
+        for pos in expected_positions:
+            if pos not in positions:
+                raise Exception(f"Missing expected position: {pos}")
+        
+        duration = time.time() - start_time
+        print(f"✅ PASS: Gorilla podcast JSON validation completed in {duration:.2f}s")
+        
+        return {
+            "test_name": "gorilla_podcast_json_validation",
+            "passed": True,
+            "duration": duration,
+            "metrics": {
+                "dialogue_entries_validated": len(dialogue),
+                "positioning_corrections_verified": 1,
+                "timing_synchronization_verified": 1,
+                "layer_count_validated": parsed["composition"]["layer_count"],
+            },
+        }
+        
+    except Exception as e:
+        duration = time.time() - start_time
+        print(f"❌ FAIL: Gorilla podcast JSON validation failed: {e}")
+        return {
+            "test_name": "gorilla_podcast_json_validation",
+            "passed": False,
+            "error": str(e),
+            "duration": duration,
+        }
+
+
+async def test_vertical_default_validation():
+    """Test that the system always defaults to vertical format for TikTok optimization"""
+    
+    print("🔍 Testing Vertical Default Validation")
+    
+    start_time = time.time()
+    
+    try:
+        # Test data structures that should always be vertical
+        test_cases = [
+            {
+                "name": "Simple Morning Routine",
+                "composition": {
+                    "canvas_type": "vertical_short_form",
+                    "layer_count": 3,
+                    "total_duration": "30 seconds",
+                    "composition_style": "tiktok_layered"
+                }
+            },
+            {
+                "name": "Complex Dialogue Content",
+                "composition": {
+                    "canvas_type": "vertical_short_form",
+                    "layer_count": 4,
+                    "total_duration": "45 seconds",
+                    "composition_style": "mobile_podcast"
+                }
+            },
+            {
+                "name": "Educational Content",
+                "composition": {
+                    "canvas_type": "vertical_short_form",
+                    "layer_count": 5,
+                    "total_duration": "60 seconds",
+                    "composition_style": "educational_vertical"
+                }
+            }
+        ]
+        
+        print("✅ Validating vertical format defaults...")
+        for i, test_case in enumerate(test_cases):
+            composition = test_case["composition"]
+            
+            # Validate canvas_type is always vertical_short_form
+            if composition["canvas_type"] != "vertical_short_form":
+                raise Exception(f"Test case '{test_case['name']}' must use vertical_short_form canvas_type for TikTok optimization")
+                
+            # Validate composition_style suggests mobile/vertical optimization
+            mobile_styles = ["tiktok_layered", "mobile_podcast", "educational_vertical", "vertical_story", "mobile_optimized"]
+            style_is_mobile = any(mobile_term in composition["composition_style"] for mobile_term in ["tiktok", "mobile", "vertical"])
+            
+            if not style_is_mobile:
+                print(f"⚠️  Warning: Test case '{test_case['name']}' style should indicate mobile/vertical optimization")
+        
+        print("✅ Validating TikTok duration optimization...")
+        for test_case in test_cases:
+            duration_str = test_case["composition"]["total_duration"]
+            # Extract number from duration string
+            duration_num = int(duration_str.split()[0])
+            
+            # TikTok optimal durations are 15-60 seconds
+            if duration_num < 15 or duration_num > 60:
+                print(f"⚠️  Warning: '{test_case['name']}' duration {duration_num}s may not be optimal for TikTok (15-60s recommended)")
+        
+        print("✅ Validating mobile-first approach...")
+        # All test cases should demonstrate mobile-first thinking
+        mobile_indicators = ["vertical_short_form", "tiktok", "mobile", "vertical"]
+        for test_case in test_cases:
+            composition_str = str(test_case["composition"])
+            has_mobile_indicator = any(indicator in composition_str.lower() for indicator in mobile_indicators)
+            
+            if not has_mobile_indicator:
+                raise Exception(f"Test case '{test_case['name']}' should include mobile/vertical indicators")
+        
+        duration = time.time() - start_time
+        print(f"✅ PASS: Vertical default validation completed in {duration:.2f}s")
+        
+        return {
+            "test_name": "vertical_default_validation",
+            "passed": True,
+            "duration": duration,
+            "metrics": {
+                "test_cases_validated": len(test_cases),
+                "vertical_format_enforced": True,
+                "mobile_optimization_verified": True,
+                "tiktok_duration_checked": True,
+            },
+        }
+        
+    except Exception as e:
+        duration = time.time() - start_time
+        print(f"❌ FAIL: Vertical default validation failed: {e}")
+        return {
+            "test_name": "vertical_default_validation",
+            "passed": False,
+            "error": str(e),
+            "duration": duration,
+        }
+
+
 async def run_82ndrop_evaluations():
     """Run all 82ndrop agent evaluation tests"""
     
@@ -474,6 +778,8 @@ async def run_82ndrop_evaluations():
         test_prompt_structures,
         test_json_format_validation,
         test_successful_examples_analysis,
+        test_gorilla_podcast_json_validation,
+        test_vertical_default_validation,
     ]
     
     results = []

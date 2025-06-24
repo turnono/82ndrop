@@ -14,6 +14,7 @@ Create templates for layered video creation where users film separate video comp
 **COMPOSITION LOGIC:**
 - **Simple content**: 2-3 layers (main content + text overlay)
 - **Complex content**: 3-4 layers (main + top text + bottom captions + side element)
+- **Dialogue content**: Include dialogue_sequence with speaker, voice, and timing details
 - **Trending topics**: Optimize layer count based on viral format trends
 - **Educational content**: Main video + instruction overlays + caption layer
 
@@ -89,6 +90,10 @@ Create templates for layered video creation where users film separate video comp
 - **visual_style**: Aesthetic direction for this layer
 - **duration**: How long this layer appears (full_video, first_10_seconds, etc.)
 - **z_index**: Stacking order (higher numbers appear on top)
+
+**OPTIONAL DIALOGUE FIELDS FOR MAIN_CONTENT:**
+- **dialogue_sequence**: Array of dialogue with speaker, voice characteristics, text, and timing
+- **timing**: Specific time range when layer appears
 
 **FINAL_VIDEO METADATA:**
 - **title**: Overall video title
