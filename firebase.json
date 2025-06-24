@@ -12,5 +12,19 @@
       ],
       "predeploy": []
     }
-  ]
+  ],
+  "database": {
+    "rules": "database.rules.json"
+  },
+  "hosting": {
+    "site": "82ndrop",
+    "public": "frontend/dist/frontend",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
 }

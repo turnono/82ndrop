@@ -1,89 +1,112 @@
 <div class="dashboard-container">
-    <!-- Compact Header - Always visible -->
-    <header class="dashboard-header" [class.compact]="showChat">
-        <div class="header-content">
-            <div class="header-left">
-                <button *ngIf="showChat" class="back-button" (click)="showChat = false" title="Back to Dashboard">
-                    <span class="back-icon">←</span>
-                </button>
-                <div class="brand-section">
-                    <div class="brand-icon">🎬</div>
-                    <div class="brand-text">
-                        <h1>82ndrop</h1>
-                        <span class="tagline">Video Prompt Generator</span>
-                    </div>
-                </div>
-            </div>
+  <!-- Compact Header - Always visible -->
+  <header class="dashboard-header" [class.compact]="showChat">
+    <div class="header-content">
+      <div class="header-left">
+        <button *ngIf="showChat" class="back-button" (click)="showChat = false" title="Back to Dashboard">
+          <span class="back-icon">←</span>
+        </button>
+        <div class="brand-section">
+          <div class="brand-icon">🎬</div>
+          <div class="brand-text">
+            <h1>82ndrop</h1>
+            <span class="tagline">Video Prompt Generator</span>
+          </div>
+        </div>
+      </div>
 
-            <!-- Center Plus Button -->
-            <button class="center-plus-button" (click)="startNewSession()" (mousedown)="onButtonMouseDown()"
-                title="Start New Session">
-                <span class="plus-icon">+</span>
+      <!-- Center Plus Button -->
+      <button class="center-plus-button" (click)="startNewSession()" (mousedown)="onButtonMouseDown()"
+        title="Start New Session">
+        <span class="plus-icon">+</span>
+      </button>
+
+      <div class="header-actions">
+        <!-- Mobile Session Menu Button -->
+        <button *ngIf="showChat" class="mobile-session-btn" (click)="toggleMobileSessionMenu()" title="Session History">
+          <span class="session-icon">☰</span>
+        </button>
+
+        <div class="user-info" *ngIf="user">
+          <div class="user-avatar-container">
+            <img [src]="user.photoURL || '/assets/default-avatar.png'" [alt]="user.displayName || 'User'"
+              class="user-avatar" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+            <div class="user-avatar user-fallback" style="display: none;">
+              👤
+            </div>
+          </div>
+          <div class="user-dropdown">
+            <div class="user-details">
+              <span class="user-name">{{ user.displayName || user.email }}</span>
+              <span class="user-email" *ngIf="user.displayName">{{ user.email }}</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" (click)="onSignOut()">
+              Sign Out
             </button>
-
-            <div class="header-actions">
-                <div class="user-info" *ngIf="user">
-                    <div class="user-avatar-container">
-                        <img [src]="user.photoURL || '/assets/default-avatar.png'" [alt]="user.displayName || 'User'"
-                            class="user-avatar"
-                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
-                        <div class="user-avatar user-fallback" style="display: none;">
-                            👤
-                        </div>
-                    </div>
-                    <div class="user-dropdown">
-                        <div class="user-details">
-                            <span class="user-name">{{ user.displayName || user.email }}</span>
-                            <span class="user-email" *ngIf="user.displayName">{{ user.email }}</span>
-                        </div>
-                        <button class="btn btn-ghost btn-sm" (click)="onSignOut()">
-                            Sign Out
-                        </button>
-                    </div>
-                </div>
-            </div>
+          </div>
         </div>
-    </header>
+      </div>
+    </div>
+  </header>
 
-    <!-- Main Content Area -->
-    <main class="dashboard-main" [class.full-screen]="showChat">
-        <!-- Chat Interface - Full Featured -->
-        <div class="chat-container" *ngIf="showChat">
-            <app-chat #chatComponent (backToMenu)="showChat = false"></app-chat>
+  <!-- Main Content Area -->
+  <main class="dashboard-main" [class.full-screen]="showChat">
+    <!-- Chat Interface with Session History -->
+    <div class="chat-layout" *ngIf="showChat">
+      <div class="session-sidebar">
+        <app-session-history (sessionSelected)="onSessionSelected($event)" (newSessionCreated)="onNewSessionCreated()">
+        </app-session-history>
+      </div>
+      <div class="chat-container">
+        <app-chat #chatComponent (backToMenu)="showChat = false"></app-chat>
+      </div>
+
+      <!-- Mobile Session Overlay -->
+      <div class="mobile-session-overlay" *ngIf="showMobileSessionMenu" (click)="closeMobileSessionMenu()">
+        <div class="mobile-session-content" (click)="$event.stopPropagation()">
+          <div class="mobile-session-header">
+            <h3>Session History</h3>
+            <button class="close-btn" (click)="closeMobileSessionMenu()">×</button>
+          </div>
+          <app-session-history (sessionSelected)="onMobileSessionSelected($event)"
+            (newSessionCreated)="onMobileNewSession()">
+          </app-session-history>
+        </div>
+      </div>
+    </div>
+
+    <!-- Landing View -->
+    <div class="landing-view" *ngIf="!showChat">
+      <div class="hero-section">
+        <div class="hero-content">
+          <h1>Create Amazing Video Prompts</h1>
+          <p>Transform your ideas into professional video prompts with AI assistance</p>
+          <button class="btn btn-primary btn-lg" (click)="startNewSession()">
+            <span class="icon">🚀</span>
+            Start Creating
+          </button>
+        </div>
+      </div>
+
+      <div class="features-showcase">
+        <div class="feature-item">
+          <div class="feature-icon">🎯</div>
+          <h3>Smart Guidance</h3>
+          <p>AI helps structure your video ideas into complete prompts</p>
         </div>
 
-        <!-- Landing View -->
-        <div class="landing-view" *ngIf="!showChat">
-            <div class="hero-section">
-                <div class="hero-content">
-                    <h1>Create Amazing Video Prompts</h1>
-                    <p>Transform your ideas into professional video prompts with AI assistance</p>
-                    <button class="btn btn-primary btn-lg" (click)="startNewSession()">
-                        <span class="icon">🚀</span>
-                        Start Creating
-                    </button>
-                </div>
-            </div>
-
-            <div class="features-showcase">
-                <div class="feature-item">
-                    <div class="feature-icon">🎯</div>
-                    <h3>Smart Guidance</h3>
-                    <p>AI helps structure your video ideas into complete prompts</p>
-                </div>
-
-                <div class="feature-item">
-                    <div class="feature-icon">🔍</div>
-                    <h3>Enhanced Research</h3>
-                    <p>Automatically enhance prompts with relevant information</p>
-                </div>
-
-                <div class="feature-item">
-                    <div class="feature-icon">✨</div>
-                    <h3>Professional Output</h3>
-                    <p>Generate production-ready video prompts instantly</p>
-                </div>
-            </div>
+        <div class="feature-item">
+          <div class="feature-icon">🔍</div>
+          <h3>Enhanced Research</h3>
+          <p>Automatically enhance prompts with relevant information</p>
         </div>
-    </main>
+
+        <div class="feature-item">
+          <div class="feature-icon">✨</div>
+          <h3>Professional Output</h3>
+          <p>Generate production-ready video prompts instantly</p>
+        </div>
+      </div>
+    </div>
+  </main>
 </div>

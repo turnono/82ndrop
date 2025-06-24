@@ -1,0 +1,257 @@
+import { Injectable } from '@angular/core';
+import {
+  Database,
+  ref,
+  push,
+  set,
+  get,
+  child,
+  onValue,
+  off,
+  query,
+  orderByChild,
+  limitToLast,
+} from 'firebase/database';
+import { AuthService } from './auth.service';
+import { BehaviorSubject, Observable } from 'rxjs';
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  userId: string;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+  lastMessage?: string;
+  preview?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  sessionId: string;
+  type: 'user' | 'agent' | 'system' | 'progress';
+  content: string;
+  timestamp: number;
+  workflowSteps?: string[];
+}
+
+@Injectable({
+  providedIn: 'root',
+})
+export class SessionHistoryService {
+  private db!: Database;
+  private sessionsSubject = new BehaviorSubject<ChatSession[]>([]);
+  private currentSessionSubject = new BehaviorSubject<ChatSession | null>(null);
+  private messagesSubject = new BehaviorSubject<ChatMessage[]>([]);
+
+  public sessions$ = this.sessionsSubject.asObservable();
+  public currentSession$ = this.currentSessionSubject.asObservable();
+  public messages$ = this.messagesSubject.asObservable();
+
+  constructor(private authService: AuthService) {
+    // Initialize Firebase Database
+    import('firebase/app').then(({ getApp }) => {
+      import('firebase/database').then(({ getDatabase }) => {
+        this.db = getDatabase(getApp());
+        this.initializeRealtimeListeners();
+      });
+    });
+  }
+
+  private initializeRealtimeListeners() {
+    this.authService.getUser().subscribe((user) => {
+      if (user) {
+        this.loadUserSessions(user.uid);
+      } else {
+        this.sessionsSubject.next([]);
+        this.currentSessionSubject.next(null);
+        this.messagesSubject.next([]);
+      }
+    });
+  }
+
+  private loadUserSessions(userId: string) {
+    const sessionsRef = ref(this.db, `sessions/${userId}`);
+    const sessionsQuery = query(
+      sessionsRef,
+      orderByChild('updatedAt'),
+      limitToLast(50)
+    );
+
+    onValue(sessionsQuery, (snapshot) => {
+      const sessions: ChatSession[] = [];
+
+      if (snapshot.exists()) {
+        snapshot.forEach((childSnapshot) => {
+          const session = {
+            id: childSnapshot.key!,
+            ...childSnapshot.val(),
+          } as ChatSession;
+          sessions.unshift(session); // Most recent first
+        });
+      }
+
+      this.sessionsSubject.next(sessions);
+    });
+  }
+
+  async createSession(title?: string): Promise<ChatSession> {
+    const user = this.authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const now = Date.now();
+    const sessionData = {
+      title: title || `New Session ${new Date().toLocaleDateString()}`,
+      userId: user.uid,
+      createdAt: now,
+      updatedAt: now,
+      messageCount: 0,
+      lastMessage: '',
+      preview: 'New conversation started',
+    };
+
+    const sessionsRef = ref(this.db, `sessions/${user.uid}`);
+    const newSessionRef = push(sessionsRef);
+
+    await set(newSessionRef, sessionData);
+
+    const session: ChatSession = {
+      id: newSessionRef.key!,
+      ...sessionData,
+    };
+
+    this.currentSessionSubject.next(session);
+    return session;
+  }
+
+  async loadSession(sessionId: string): Promise<ChatMessage[]> {
+    const user = this.authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    // Load session info
+    const sessionRef = ref(this.db, `sessions/${user.uid}/${sessionId}`);
+    const sessionSnapshot = await get(sessionRef);
+
+    if (sessionSnapshot.exists()) {
+      const session: ChatSession = {
+        id: sessionId,
+        ...sessionSnapshot.val(),
+      };
+      this.currentSessionSubject.next(session);
+    }
+
+    // Load messages
+    const messagesRef = ref(this.db, `messages/${sessionId}`);
+    const messagesQuery = query(messagesRef, orderByChild('timestamp'));
+
+    return new Promise((resolve) => {
+      onValue(
+        messagesQuery,
+        (snapshot) => {
+          const messages: ChatMessage[] = [];
+
+          if (snapshot.exists()) {
+            snapshot.forEach((childSnapshot) => {
+              const message = {
+                id: childSnapshot.key!,
+                ...childSnapshot.val(),
+              } as ChatMessage;
+              messages.push(message);
+            });
+          }
+
+          this.messagesSubject.next(messages);
+          resolve(messages);
+        },
+        { onlyOnce: true }
+      );
+    });
+  }
+
+  async saveMessage(
+    sessionId: string,
+    message: Omit<ChatMessage, 'id' | 'sessionId' | 'timestamp'>
+  ): Promise<void> {
+    const user = this.authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const now = Date.now();
+    const messageData = {
+      ...message,
+      sessionId,
+      timestamp: now,
+    };
+
+    // Save message
+    const messagesRef = ref(this.db, `messages/${sessionId}`);
+    const newMessageRef = push(messagesRef);
+    await set(newMessageRef, messageData);
+
+    // Update session metadata
+    const sessionRef = ref(this.db, `sessions/${user.uid}/${sessionId}`);
+    const sessionSnapshot = await get(sessionRef);
+
+    if (sessionSnapshot.exists()) {
+      const sessionData = sessionSnapshot.val();
+      const preview =
+        message.type === 'user'
+          ? message.content.substring(0, 100) + '...'
+          : message.type === 'agent'
+          ? 'Generated video prompt'
+          : sessionData.preview;
+
+      await set(sessionRef, {
+        ...sessionData,
+        updatedAt: now,
+        messageCount: (sessionData.messageCount || 0) + 1,
+        lastMessage: message.content.substring(0, 100),
+        preview,
+      });
+    }
+  }
+
+  async updateSessionTitle(sessionId: string, title: string): Promise<void> {
+    const user = this.authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const sessionRef = ref(this.db, `sessions/${user.uid}/${sessionId}/title`);
+    await set(sessionRef, title);
+  }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    const user = this.authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
+
+    // Delete messages
+    const messagesRef = ref(this.db, `messages/${sessionId}`);
+    await set(messagesRef, null);
+
+    // Delete session
+    const sessionRef = ref(this.db, `sessions/${user.uid}/${sessionId}`);
+    await set(sessionRef, null);
+  }
+
+  getCurrentSession(): ChatSession | null {
+    return this.currentSessionSubject.value;
+  }
+
+  getCurrentMessages(): ChatMessage[] {
+    return this.messagesSubject.value;
+  }
+
+  // Auto-generate session title from first message
+  async generateSessionTitle(
+    sessionId: string,
+    firstMessage: string
+  ): Promise<void> {
+    const words = firstMessage.split(' ').slice(0, 6).join(' ');
+    const title = words.length > 0 ? words + '...' : 'New Session';
+    await this.updateSessionTitle(sessionId, title);
+  }
+
+  // Cleanup listeners
+  destroy() {
+    // Remove Firebase listeners when service is destroyed
+    // This prevents memory leaks
+  }
+}

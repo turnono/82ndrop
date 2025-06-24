@@ -3,12 +3,14 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { AuthService, AuthUser } from '../../services/auth.service';
 import { AgentService } from '../../services/agent.service';
+import { SessionHistoryService } from '../../services/session-history.service';
 import { ChatComponent } from '../chat/chat.component';
+import { SessionHistoryComponent } from '../session-history/session-history.component';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule, ChatComponent],
+  imports: [CommonModule, RouterModule, ChatComponent, SessionHistoryComponent],
   templateUrl: './dashboard.component.html',
   styleUrls: ['./dashboard.component.scss'],
 })
@@ -16,10 +18,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   @ViewChild(ChatComponent) chatComponent!: ChatComponent;
   user: AuthUser | null = null;
   private _showChat = true; // Start directly in chat, user can go back to dashboard with back button
+  showMobileSessionMenu = false;
 
   constructor(
     private authService: AuthService,
-    private agentService: AgentService
+    private agentService: AgentService,
+    private sessionHistoryService: SessionHistoryService
   ) {}
 
   get showChat(): boolean {
@@ -63,6 +67,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
     console.log('🖱️ BUTTON MOUSE DOWN DETECTED!');
   }
 
+  onSessionSelected(sessionId: string) {
+    console.log('📂 Session selected:', sessionId);
+    // The session will be loaded by the session history service
+    // and the chat component will update automatically
+  }
+
+  onNewSessionCreated() {
+    console.log('✨ New session created');
+    // Reset chat component to show new session
+    if (this.chatComponent) {
+      this.chatComponent.startNewSession();
+    }
+  }
+
   startNewSession() {
     console.log('🚀 NEW SESSION BUTTON CLICKED!');
 
@@ -101,5 +119,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
         }, 200);
       }
     }, 100);
+  }
+
+  // Mobile session menu methods
+  toggleMobileSessionMenu() {
+    this.showMobileSessionMenu = !this.showMobileSessionMenu;
+  }
+
+  closeMobileSessionMenu() {
+    this.showMobileSessionMenu = false;
+  }
+
+  onMobileSessionSelected(sessionId: string) {
+    this.onSessionSelected(sessionId);
+    this.closeMobileSessionMenu();
+  }
+
+  onMobileNewSession() {
+    this.onNewSessionCreated();
+    this.closeMobileSessionMenu();
   }
 }
