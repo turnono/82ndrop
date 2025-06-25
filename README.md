@@ -1,20 +1,19 @@
-# 82ndrop - AI Video Composition Generator
+# 82ndrop - AI Video Prompt Generator
 
-**Transform your ideas into layered video composition templates instantly with AI-powered assistance.**
+**Transform your ideas into professional video prompts instantly with AI-powered Master Prompt Templates.**
 
 ## 🎯 What This Project Does
 
-82ndrop is a production-ready AI application that helps content creators generate intelligent video composition templates for modern short-form content. Users describe their video ideas through a conversational chat interface, and our multi-agent AI system returns professionally crafted layered composition structures optimized for video editing and content creation.
+82ndrop is a production-ready AI application that helps content creators generate intelligent video prompts using the Master Prompt Template strategy. Users describe their video ideas through a conversational chat interface, and our multi-agent AI system returns professionally crafted natural language video prompts optimized for vertical short-form content creation.
 
 ### Core Functionality
 
 - **💬 Interactive Chat Interface**: Professional session-based chat with conversation history and real-time sync
 - **📚 Session Management**: Complete conversation persistence with sidebar navigation and session controls
-- **🗂️ Template Intelligence**: AI agents automatically discover, reuse, and create templates for any content type
-- **🤖 Multi-Agent AI System**: Specialized AI agents work together to analyze, enhance, and generate video compositions
-- **🎬 Layered Video Composition**: Generates intelligent layer templates with positioning, timing, and visual styling
-- **📱 Vertical-First Design**: All compositions automatically optimized for TikTok, Instagram Reels, YouTube Shorts
-- **🎯 Smart Layer Management**: Automatic layer count recommendations (2-5 layers) with z-index stacking
+- **🎬 Master Prompt Templates**: AI generates natural language video prompts using the proven Master Prompt strategy
+- **🤖 Multi-Agent AI System**: Specialized AI agents work together to analyze, enhance, and generate video prompts
+- **📱 Vertical-First Design**: All prompts automatically optimized for TikTok, Instagram Reels, YouTube Shorts (9:16 format)
+- **🎯 Layer-Based Composition**: Top Third/Center/Bottom Third structure for mobile viewing
 - **🔐 Firebase Authentication**: Secure user authentication with Google Sign-In and access control
 - **📊 Analytics & Monitoring**: Comprehensive logging and user analytics tracking
 - **☁️ Cloud-Native**: Deployed on Google Cloud Run with Firebase hosting
@@ -39,10 +38,10 @@
 
 ### AI Agent System
 
-- **Task Master Agent**: Orchestrates the entire video composition generation workflow
-- **Guide Agent**: Analyzes and structures user ideas into video concepts
+- **Task Master Agent**: Orchestrates the entire video prompt generation workflow
+- **Guide Agent**: Analyzes user ideas and structures them for vertical composition
 - **Search Agent**: Enriches concepts with web research and trending topics
-- **Prompt Writer Agent**: Creates intelligent layered composition templates with positioning and styling
+- **Prompt Writer Agent**: Creates Master Prompt Templates in natural language format
 
 ## 🚀 Live Demo
 
@@ -53,21 +52,53 @@
 1. **Sign in** with your Google account
 2. **Start chatting** - click "Start Creating" or the "+" button to begin a new session
 3. **Describe your video idea** (e.g., "Create a morning routine video for busy people")
-4. **Receive intelligent compositions** - layered templates optimized for vertical video
+4. **Receive Master Prompt Templates** - natural language video prompts optimized for vertical format
 5. **Access conversation history** - all sessions saved with smart titles in the sidebar
 6. **Switch between sessions** - click any previous conversation to continue
-7. **Copy JSON output** to use directly in your video editing workflow
+7. **Refine and iterate** - add dialogue, modify scenes, adjust timing directly in chat
 
-## 🎬 Output Format
+## 🎬 Master Prompt Template Output
 
-82ndrop generates intelligent **vertical layered video composition templates** specifically optimized for TikTok, Instagram Reels, and YouTube Shorts. Each template specifies how to structure your video with multiple overlapping layers in 9:16 (vertical) format with mobile-optimized positioning, timing, and visual styling.
+82ndrop generates **natural language Master Prompt Templates** specifically optimized for TikTok, Instagram Reels, and YouTube Shorts. Each prompt uses a structured three-layer approach (Top Third/Center/Bottom Third) designed for 9:16 vertical video creation.
 
-### 📱 **Vertical-First Design:**
+### 📱 **Vertical-First Design (9:16 Format):**
 
-- **Automatic Vertical Format**: All videos default to 9:16 aspect ratio (TikTok/mobile standard)
-- **Mobile Optimization**: Elements sized and positioned for phone screens
+- **Mobile Optimization**: Every prompt structured for phone screen viewing
 - **TikTok Standards**: Follows platform best practices for engagement
-- **Portrait Framing**: Every composition assumes vertical orientation
+- **Three-Layer Structure**: Top Third (titles), Center (main content), Bottom Third (captions)
+- **Built-in Branding**: @82ndrop automatically included
+
+### Example Master Prompt Output:
+
+```
+Generate a single, cohesive vertical short-form video (9:16 aspect ratio, optimized for TikTok mobile viewing), 30 seconds long. The screen is a composite of the following layers:
+
+Top Third:
+Display the static text: "Morning Routine That Changed My Life" in a bold, white Montserrat font with subtle drop shadow. This stays visible for the full duration.
+
+Center (Main Scene):
+Show a productive professional in a bright, minimalist bedroom demonstrating their optimized morning routine. Use smooth tracking shots and close-ups of key actions like meditation, journaling, and coffee preparation. Frame vertically to show full body movements while maintaining intimate feel. Include soft morning lighting and upbeat background music. Camera work includes close-up of alarm at 5:30 AM, medium shot of meditation pose, overhead shot of journal writing, and tracking shot of coffee preparation.
+
+Bottom Third:
+Over a motion B-roll of time-lapse sunrise, display the following captions:
+0-8s: "Wake up at 5:30 AM"
+8-15s: "10 minutes meditation"
+15-22s: "Gratitude journaling"
+22-28s: "Ready to conquer the day"
+28-30s: "@82ndrop | #morningroutine"
+
+All visual layers should feel cinematic, coherent, and aligned with the TikTok 9:16 format.
+```
+
+### Key Features:
+
+- **📝 Natural Language**: Human-readable prompts, not code or JSON
+- **🎯 Layer Structure**: Clear Top/Center/Bottom composition
+- **⏰ Precise Timing**: Exact caption timing for mobile attention spans
+- **📱 Mobile Framing**: Every element positioned for vertical viewing
+- **🎬 Cinematic Direction**: Camera angles, lighting, and mood specified
+- **🏷️ Auto Branding**: @82ndrop branding automatically included
+- **🔄 Interactive Refinement**: Users can modify and enhance prompts in real-time
 
 ### Enhanced Features:
 
@@ -75,229 +106,77 @@
 - **💬 Professional Chat Interface**: Session sidebar with ChatGPT-style conversation management
 - **🔄 Auto-Session Management**: Smart session creation and title generation from first message
 - **⚡ Real-time Sync**: Firebase Realtime Database ensures instant updates across all devices
-- **🎭 Dialogue Sequences**: Support for multi-character conversations with vertical timing
-- **⏰ Precise Mobile Timing**: Text overlays synchronized with dialogue for mobile attention spans
-- **📍 Vertical Positioning**: top_third, middle_third, center_main, bottom_third optimized for 9:16
-- **🎥 TikTok-Style Compositions**: 3-5 layers with proper z-index stacking for mobile
-- **🎙️ Mobile Podcast Content**: Vertical speakers with camera cuts optimized for portrait viewing
+- **🎭 Dialogue Integration**: Add voiceovers and dialogue directly to prompts
+- **🎵 Audio Suggestions**: Background music and sound effect recommendations
+- **📊 Trending Elements**: Current TikTok trends automatically incorporated
 
-### Example Output:
+## 🎥 Supported Content Types
 
-```json
-{
-  "composition": {
-    "layer_count": 4,
-    "canvas_type": "vertical_short_form",
-    "total_duration": "8 seconds",
-    "composition_style": "layered_content"
-  },
-  "layers": [
-    {
-      "layer_id": 1,
-      "layer_type": "text_overlay",
-      "position": "top_third",
-      "content_prompt": "Show the text \"One-Eyed Gorilla Podcast\"",
-      "visual_style": "retro-futuristic glowing text",
-      "duration": "full_video",
-      "z_index": 4
-    },
-    {
-      "layer_id": 2,
-      "layer_type": "main_content",
-      "position": "center_main",
-      "content_prompt": "Film three funky gorillas with hippy jewelry sitting around a round stone podcast table with glowing primitive microphones",
-      "visual_style": "stylized Joe Rogan-style podcast in Stone Age setting",
-      "duration": "full_video",
-      "z_index": 1,
-      "dialogue_sequence": [
-        {
-          "speaker": "tall_gorilla",
-          "voice": "raspy",
-          "text": "They say he landed with nothing…",
-          "timing": "0-2s"
-        },
-        {
-          "speaker": "short_spiky_gorilla",
-          "voice": "excited",
-          "text": "…but left a trail of awakened minds.",
-          "timing": "2-4s"
-        },
-        {
-          "speaker": "medium_gorilla",
-          "voice": "low_and_slow",
-          "text": "He made the choice… when others followed instinct.",
-          "timing": "4-6s"
-        },
-        {
-          "speaker": "all_three",
-          "voice": "soft_whisper",
-          "text": "That's what made him the upgrade.",
-          "timing": "6-8s"
-        }
-      ]
-    },
-    {
-      "layer_id": 3,
-      "layer_type": "text_overlay",
-      "position": "middle_third",
-      "content_prompt": "Show the line \"The brown one made a choice.\"",
-      "visual_style": "retro-futuristic glowing text",
-      "duration": "2.5 seconds",
-      "timing": "4-6.5s",
-      "z_index": 3
-    },
-    {
-      "layer_id": 4,
-      "layer_type": "caption_layer",
-      "position": "bottom_third",
-      "content_prompt": "Show \"Not strength. Not instinct. Choice.\"",
-      "visual_style": "subtitle_style_glowing",
-      "duration": "full_video",
-      "z_index": 2
-    }
-  ],
-  "final_video": {
-    "title": "One-Eyed Gorilla Podcast - The Upgrade",
-    "description": "What makes the One-Eyed Gorilla different? Not strength. Not instinct. Choice.",
-    "hashtags": [
-      "#podcast",
-      "#gorilla",
-      "#stoneage",
-      "#retrofuture",
-      "#choice"
-    ],
-    "call_to_action": "Tune in for full episodes!",
-    "engagement_hook": "They say he landed with nothing…"
-  }
-}
-```
+- **📱 Social Media Content**: TikTok, Instagram Reels, YouTube Shorts
+- **📚 Educational Videos**: Tutorials, how-tos, explainers
+- **💼 Business Content**: Product demos, company culture, testimonials
+- **🎬 Entertainment**: Viral stories, comedy skits, creative content
+- **🎙️ Podcast Clips**: Vertical podcast content with engaging visuals
+- **🏃‍♂️ Lifestyle**: Morning routines, fitness, productivity tips
 
-### Layer Types:
+## 🔧 Technical Stack
 
-- **main_content**: Primary filmed content (background layer)
-- **text_overlay**: Animated text, titles, hooks
-- **caption_layer**: Subtitles, captions, CTAs
-- **graphic_overlay**: Icons, animations, visual elements
-- **reaction_layer**: Picture-in-picture content
+### Frontend
 
-### Positioning Options:
+- **Angular 19** - Modern web framework
+- **TypeScript** - Type-safe development
+- **Firebase Hosting** - Global CDN deployment
+- **Firebase Auth** - Secure authentication
+- **Responsive Design** - Mobile-first approach
 
-- **top_third**: Upper portion of screen (titles, headers)
-- **middle_third**: Middle portion of screen (mid-video text overlays)
-- **center_main**: Primary content area (main video content)
-- **bottom_third**: Lower portion for captions and subtitles
-- **floating_overlay**: Flexible positioning anywhere on screen
-- **split_screen**: Side-by-side layouts
-- **full_screen**: Takes entire canvas
+### Backend
 
-### Dialogue Support:
+- **Google ADK** - Agent Development Kit
+- **Python/FastAPI** - High-performance API
+- **Google Cloud Run** - Serverless deployment
+- **Firebase Realtime Database** - Real-time data sync
+- **Google Search API** - Trend research integration
 
-When your video includes dialogue, the system automatically generates:
+### AI System
 
-- **dialogue_sequence**: Array with speaker, voice, text, and timing
-- **timing**: Precise synchronization with text overlays
-- **speaker_details**: Character identification and voice characteristics
+- **Gemini 2.0 Flash** - Advanced language model
+- **Multi-Agent Architecture** - Specialized AI agents
+- **Natural Language Processing** - Human-readable output
+- **Web Search Integration** - Current trends and viral content
 
-## 🛠️ Technical Stack
-
-| Component          | Technology                             | Purpose                     |
-| ------------------ | -------------------------------------- | --------------------------- |
-| **Frontend**       | Angular 19, TypeScript, SCSS           | Modern web interface        |
-| **Backend**        | FastAPI, Python, Google ADK            | AI agent orchestration      |
-| **Authentication** | Firebase Auth                          | User management & security  |
-| **Database**       | Firebase Realtime Database + Firestore | Session history & user data |
-| **AI Models**      | Gemini 2.0 Flash                       | Natural language processing |
-| **Hosting**        | Firebase Hosting                       | Frontend deployment         |
-| **API Hosting**    | Google Cloud Run                       | Backend deployment          |
-| **Functions**      | Firebase Functions                     | User access management      |
-
-## 🎨 Key Features
-
-### 🔒 **Enterprise Security (Production-Ready)**
-
-- **Multi-Layer Authentication**: Firebase Auth + JWT validation + middleware protection
-- **Role-Based Access Control**: Basic/Premium/Admin levels with custom claims
-- **Mobile Security**: iOS Safari compatibility with secure token handling
-- **API Protection**: All endpoints secured with 401 unauthorized responses
-- **Security Testing**: Comprehensive authentication flow validation
-- **Production Hardened**: CORS, domain authorization, and error handling implemented
-
-### 🤖 **Intelligent AI Workflow**
-
-- Multi-agent system with specialized roles
-- Context-aware composition generation
-- Web search integration for trending topics
-- Layered JSON composition templates
-- Smart layer count recommendations (2-5 layers)
-- Automatic z-index stacking and positioning
-
-### 📱 **Mobile-Optimized UI**
-
-- Responsive chat interface
-- Touch-friendly interactions
-- iOS Safari compatibility
-- Auto-scroll and typing indicators
-
-### 📊 **Analytics & Monitoring**
-
-- User activity tracking
-- API performance monitoring
-- Error logging and debugging
-- Usage analytics dashboard
-
-## 🔐 Security Implementation
-
-### **Enterprise-Grade Security Architecture**
-
-Our security implementation demonstrates production-ready authentication and authorization:
-
-#### **Multi-Layer Authentication**
-
-- **Firebase Authentication**: Google Sign-In with OAuth 2.0
-- **JWT Token Validation**: Firebase ID tokens validated on every API request
-- **Middleware Protection**: Custom FastAPI middleware validates tokens before processing
-- **Session Management**: Secure session handling with automatic token refresh
-
-#### **Access Control System**
-
-- **Role-Based Access**: Basic, Premium, and Admin access levels
-- **Custom Claims**: Firebase custom claims for granular permissions
-- **Automatic Provisioning**: New users automatically granted appropriate access
-- **Permission Validation**: API endpoints protected by user permission checks
-
-#### **Security Fixes Implemented**
-
-- **✅ Authentication Middleware**: Fixed token validation in FastAPI backend
-- **✅ CORS Configuration**: Proper cross-origin resource sharing setup
-- **✅ Domain Authorization**: Firebase authorized domains configured for production
-- **✅ Mobile Compatibility**: iOS Safari auth issues resolved
-- **✅ Token Refresh**: Automatic token renewal for seamless user experience
-
-#### **Security Testing**
-
-- **Comprehensive Test Suite**: Authentication flow testing implemented
-- **Unauthorized Access Prevention**: 401 errors for invalid/missing tokens
-- **Token Validation**: Proper Firebase ID token verification
-- **Error Handling**: Secure error responses without sensitive data exposure
-
-### **Production Security Status: ✅ SECURED**
-
-- **🔒 All API endpoints protected** with Firebase authentication
-- **🛡️ User data encrypted** in transit and at rest
-- **🔑 Access control** implemented with role-based permissions
-- **📱 Mobile security** optimized for iOS/Android browsers
-- **⚡ Real-time validation** of authentication tokens
-
-## 🎨 Development Setup
+## 🚀 Getting Started
 
 ### Prerequisites
 
 - Node.js 18+
-- Python 3.9+
-- Firebase CLI
+- Python 3.11+
 - Google Cloud SDK
+- Firebase CLI
 
-### Frontend Setup
+### Local Development
+
+1. **Clone the repository**
+
+```bash
+git clone https://github.com/yourusername/82ndrop.git
+cd 82ndrop
+```
+
+2. **Set up backend**
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+3. **Run the AI agent locally**
+
+```bash
+adk run drop_agent
+```
+
+4. **Set up frontend**
 
 ```bash
 cd frontend
@@ -305,146 +184,44 @@ npm install
 ng serve
 ```
 
-### Backend Setup
+5. **Access the application**
 
-```bash
-pip install -r requirements.txt
-python main.py
-```
+- Frontend: http://localhost:4200
+- Backend: http://localhost:8080
 
-### Environment Configuration
+### Deployment
 
-- Firebase project setup required
-- Google Cloud project with ADK enabled
-- Environment variables for API keys and credentials
+The application is automatically deployed to:
 
-## 📈 Current Status
+- **Frontend**: https://82ndrop.web.app
+- **Backend**: https://drop-agent-service-855515190257.us-central1.run.app
 
-### ✅ **Completed Features**
+## 📊 System Status
 
-- [x] **Session History & Memory System** - Complete conversation persistence with Firebase Realtime Database
-- [x] **Professional Chat Interface** - Session sidebar with conversation management and real-time sync
-- [x] **Vertical-First AI Agents** - All compositions automatically optimized for TikTok/mobile format
-- [x] **Multi-Agent AI System** - Guide, Search, and Prompt Writer agents working in coordination
-- [x] **Enhanced Dialogue Support** - Voice characteristics, timing, and speaker identification for podcast-style content
-- [x] **Smart Aspect Ratio Detection** - Automatic TikTok/vertical format detection from user input
-- [x] **Mobile-Responsive Design** - Optimized for all devices with touch-friendly session management
-- [x] **Firebase Integration** - Authentication, Realtime Database, and Hosting fully integrated
-- [x] **Cloud Deployment** - Production deployment on Google Cloud Run with auto-scaling
-- [x] **Enterprise Security** - Multi-layer authentication with role-based access control
-- [x] **Analytics & Monitoring** - Comprehensive logging and user activity tracking
+✅ **Production Ready**
 
-### 🔧 **Recent Development Notes (Latest Session)**
+- Master Prompt Template system active
+- Natural language output working
+- Vertical composition optimization enabled
+- Multi-agent workflow operational
+- Session management functional
+- Authentication and monitoring active
 
-**Template Intelligence System**: Attempted implementation but **reverted due to stability issues**. The core multi-agent system proved more reliable without the additional template complexity. Focus returned to optimizing the proven workflow.
+## 🤝 Contributing
 
-**Key Improvements Made**:
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-- ✅ **Enhanced Dialogue Capture**: System now properly captures voice characteristics ("raspy voice", "excited", "soft whisper") in structured dialogue_sequence format
-- ✅ **Better Aspect Ratio Handling**: Automatic detection of vertical/TikTok format requests with smart defaults
-- ✅ **Improved Layer Management**: Fixed layer count accuracy and positioning overlap issues
-- ✅ **Timing Precision**: Better synchronization between dialogue and text overlays
+## 📄 License
 
-**Current Production Quality**: **95% accuracy** on complex prompts with proper dialogue, timing, and vertical optimization.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-### 🎯 **Use Cases**
+## 🙏 Acknowledgments
 
-- **Content Creators**: Generate layered composition templates for short-form videos
-- **Video Editors**: Get structured layer plans before filming/editing
-- **Marketing Teams**: Create engaging social media content strategies
-- **Educators**: Develop educational video composition structures
-- **Businesses**: Generate promotional video layer templates
-- **Social Media Managers**: Plan multi-layer content for platforms
-
-## 🎨 **What Makes 82ndrop Unique**
-
-Unlike traditional prompt generators that give you simple text descriptions, 82ndrop creates **intelligent composition blueprints** that tell you:
-
-- **How many layers** your video should have
-- **Where to position** each element on screen
-- **What type of content** goes in each layer
-- **How long** each layer should appear
-- **Visual styling** recommendations for each layer
-- **Z-index stacking** for proper layer ordering
-
-This approach bridges the gap between having an idea and actually creating the video, giving creators a clear roadmap for their content production.
-
-## 📊 Performance Metrics
-
-- **Response Time**: < 3 seconds for prompt generation
-- **Uptime**: 99.9% availability on Cloud Run
-- **Mobile Compatibility**: iOS Safari, Chrome, Firefox
-- **User Experience**: Seamless authentication and chat flow
-
-## 🔮 Future Enhancements
-
-- **Video Generation**: Direct integration with Sora/Veo APIs
-- **Template Library**: Pre-built prompt templates for different niches
-- **Collaboration**: Team workspaces and shared prompts
-- **Advanced Analytics**: Detailed user insights and prompt performance
-
-## 🏆 Project Achievements
-
-This project demonstrates:
-
-- **Modern Full-Stack Development**: Angular + FastAPI + Firebase
-- **AI Agent Architecture**: Multi-agent system with Google ADK
-- **Production Deployment**: Cloud-native with auto-scaling
-- **User Experience**: Mobile-first design with authentication
-- **Enterprise Features**: Analytics, monitoring, and access control
-
----
-
-**Built for the Google ADK Hackathon** | **Live at https://82ndrop.web.app**
-
-### 🎭 **Enhanced Dialogue & Multi-Character Support** ⭐ **LATEST IMPROVEMENTS!**
-
-**🎙️ Professional Dialogue Handling for Podcast-Style Content**
-
-82ndrop now excels at complex dialogue scenarios with multiple characters:
-
-- **🎤 Voice Characteristics**: Captures specific voice directions ("raspy voice", "excited", "soft whisper")
-- **⏱️ Precise Timing**: Synchronizes dialogue with text overlays and scene transitions
-- **👥 Multi-Speaker Support**: Handles multiple characters with individual voice profiles
-- **🎬 Camera Direction**: Joe Rogan-style close-ups and reaction shots for each speaker
-
-#### **🎯 Dialogue Features:**
-
-- **Speaker Identification**: Each character gets distinct voice and personality traits
-- **Timing Synchronization**: Text overlays appear exactly when dialogue occurs
-- **Voice Direction Capture**: System remembers "(raspy voice)", "(excited)", etc.
-- **Portrait Optimization**: All dialogue optimized for vertical TikTok/mobile viewing
-
-#### **📱 Smart Format Detection:**
-
-```bash
-User Input: "Create a TikTok-style video..."
-→ System: Automatically sets canvas_type: "vertical_short_form"
-
-User Input: "...portrait format..."
-→ System: Detects and optimizes for 9:16 aspect ratio
-
-User Input: "...vertical video..."
-→ System: Applies mobile-first positioning and sizing
-```
-
-#### **🎪 Example: Complex Dialogue Output**
-
-```json
-"dialogue_sequence": [
-  {
-    "speaker": "Tall gorilla",
-    "voice": "raspy",
-    "text": "They say he landed with nothing...",
-    "timing": "0-2"
-  },
-  {
-    "speaker": "Short spiky gorilla",
-    "voice": "excited",
-    "text": "...but left a trail of awakened minds.",
-    "timing": "2-4"
-  }
-]
-```
-
-Perfect for podcast content, interviews, multi-character scenarios, and dialogue-heavy vertical videos!
+- Built with Google Agent Development Kit (ADK)
+- Powered by Gemini 2.0 Flash
+- Master Prompt Template strategy implementation
+- Vertical-first mobile optimization approach
