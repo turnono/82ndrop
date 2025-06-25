@@ -19,13 +19,13 @@ root_agent = Agent(
 {PROMPT}""",
     
     output_key="video_script_response",
-    # Temporarily removing all callbacks to debug "multiple tools" error
-    # before_agent_callback=before_agent_callback,
-    # after_agent_callback=after_agent_callback,
-    # before_model_callback=before_model_callback,
-    # after_model_callback=after_model_callback,
-    # before_tool_callback=before_tool_callback,
-    # after_tool_callback=after_tool_callback,
+    # Re-enabling callbacks for production monitoring and analytics
+    before_agent_callback=before_agent_callback,
+    after_agent_callback=after_agent_callback,
+    before_model_callback=before_model_callback,
+    after_model_callback=after_model_callback,
+    before_tool_callback=before_tool_callback,
+    after_tool_callback=after_tool_callback,
     
     # Use sub_agents for agents that can be transferred to
     sub_agents=[guide_agent, prompt_writer_agent],
