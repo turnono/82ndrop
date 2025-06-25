@@ -63,14 +63,15 @@ interface ChatMessage {
 
       <div class="input-container">
         <div class="input-wrapper">
-          <input
+          <textarea
             #messageInput
-            type="text"
             [(ngModel)]="currentMessage"
-            (keyup.enter)="sendMessage()"
-            placeholder="What kind of video do you want to create?"
+            (keyup.ctrl.enter)="sendMessage()"
+            (keyup.meta.enter)="sendMessage()"
+            placeholder="Describe your video idea in detail. Use Ctrl+Enter (Cmd+Enter on Mac) to send, or click the send button."
             class="message-input"
-          />
+            rows="3"
+          ></textarea>
           <button
             (click)="sendMessage()"
             class="send-button"
@@ -172,10 +173,14 @@ interface ChatMessage {
         flex: 1;
         padding: 12px 16px;
         border: 2px solid #e9ecef;
-        border-radius: 20px;
+        border-radius: 16px;
         outline: none;
         font-size: 16px;
-        resize: none;
+        font-family: inherit;
+        line-height: 1.4;
+        resize: vertical;
+        min-height: 48px;
+        max-height: 120px;
         transition: border-color 0.2s;
       }
 
@@ -608,13 +613,6 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       );
     } finally {
       this.isLoading = false;
-    }
-  }
-
-  onEnterKey(event: KeyboardEvent) {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      this.sendMessage();
     }
   }
 
