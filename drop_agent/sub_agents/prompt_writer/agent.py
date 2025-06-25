@@ -16,7 +16,7 @@ from ...callbacks import (
 prompt_writer_agent = Agent(
     name="prompt_writer_agent",
     model="gemini-2.0-flash",
-    description="Final step specialist who creates Master Prompt Template outputs for vertical video generation using structured JSON format.",
+    description="Final step specialist who creates Master Prompt Template outputs for vertical video generation using natural language format.",
     instruction=PROMPT_WRITER_PROMPT,
     tools=[AgentTool(agent=search_agent)],
     output_key="video_prompts_response",
