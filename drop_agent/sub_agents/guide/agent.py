@@ -22,11 +22,11 @@ guide_agent = Agent(
     # Root agent will coordinate handoffs
     
     output_key="guide_analysis_response",
-    # Temporarily removing callbacks to debug "multiple tools" error
-    # before_agent_callback=before_agent_callback,
-    # after_agent_callback=after_agent_callback,
-    # before_model_callback=before_model_callback,
-    # after_model_callback=after_model_callback,
-    # before_tool_callback=before_tool_callback,
-    # after_tool_callback=after_tool_callback,
+    # Re-enabling callbacks for production monitoring and analytics
+    before_agent_callback=before_agent_callback,
+    after_agent_callback=after_agent_callback,
+    before_model_callback=before_model_callback,
+    after_model_callback=after_model_callback,
+    before_tool_callback=before_tool_callback,
+    after_tool_callback=after_tool_callback,
 )
