@@ -480,16 +480,6 @@
       border-radius: 20px;
     }
   }
-
-  .center-plus-button {
-    width: 44px;
-    height: 44px;
-    border-width: 3px;
-
-    .plus-icon {
-      font-size: 22px;
-    }
-  }
 }
 
 // Large desktop enhancements (1400px and up)
@@ -780,43 +770,6 @@
         font-size: 18px;
       }
     }
-  }
-}
-
-.center-plus-button {
-  width: 36px;
-  height: 36px;
-  background: transparent;
-  border: 2px solid #6c757d;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-
-  &:hover {
-    border-color: #667eea;
-    transform: translateX(-50%) scale(1.05);
-  }
-
-  &:active {
-    transform: translateX(-50%) scale(0.95);
-  }
-
-  .plus-icon {
-    color: #6c757d;
-    font-size: 18px;
-    font-weight: 300;
-    line-height: 1;
-  }
-
-  &:hover .plus-icon {
-    color: #667eea;
   }
 }
 

@@ -2,7 +2,7 @@
 
 from google.adk import Agent
 from google.adk.tools.agent_tool import AgentTool
-from .prompt import DESCRIPTION, INSTRUCTION
+from .prompt import GUIDE_PROMPT
 from ...callbacks import (
     before_agent_callback,
     after_agent_callback,
@@ -15,8 +15,8 @@ from ...callbacks import (
 guide_agent = Agent(
     name="guide_agent",
     model="gemini-2.0-flash",
-    description=DESCRIPTION,
-    instruction=INSTRUCTION,
+    description="Specialist agent for analyzing and structuring user video ideas for vertical (9:16) composition using Master Prompt Template structure.",
+    instruction=GUIDE_PROMPT,
     
     # Flat hierarchy - no sub-agents, just analysis
     # Root agent will coordinate handoffs

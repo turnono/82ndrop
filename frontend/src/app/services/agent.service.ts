@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, BehaviorSubject, throwError } from 'rxjs';
 import { catchError, switchMap } from 'rxjs/operators';
 import { AuthService } from './auth.service';
+import { SessionHistoryService } from './session-history.service';
 import { environment } from '../../environments/environment';
 
 export interface ChatMessage {
@@ -65,7 +66,11 @@ export class AgentService {
   private messagesSubject = new BehaviorSubject<any[]>([]);
   public messages$ = this.messagesSubject.asObservable();
 
-  constructor(private http: HttpClient, private authService: AuthService) {}
+  constructor(
+    private http: HttpClient,
+    private authService: AuthService,
+    private sessionHistoryService: SessionHistoryService
+  ) {}
 
   /**
    * Get authenticated HTTP headers with Firebase ID token
@@ -154,6 +159,19 @@ export class AgentService {
       if (!this.currentSessionId) {
         const session = await this.createSession();
         this.currentSessionId = session.id;
+
+        // Sync session to Firebase for persistence
+        try {
+          await this.sessionHistoryService.createSession(
+            `Video Session - ${new Date().toLocaleDateString()}`,
+            session.id
+          );
+        } catch (firebaseError) {
+          console.warn(
+            'Firebase session sync failed (non-critical):',
+            firebaseError
+          );
+        }
       }
 
       const runRequest = {
@@ -262,6 +280,28 @@ export class AgentService {
         timestamp: responseTimestamp,
       };
 
+      // Save messages to Firebase for persistence (non-critical)
+      try {
+        if (this.currentSessionId) {
+          // Save user message
+          await this.sessionHistoryService.saveMessage(this.currentSessionId, {
+            type: 'user',
+            content: message,
+          });
+
+          // Save agent response
+          await this.sessionHistoryService.saveMessage(this.currentSessionId, {
+            type: 'agent',
+            content: agentContent,
+          });
+        }
+      } catch (firebaseError) {
+        console.warn(
+          'Firebase message save failed (non-critical):',
+          firebaseError
+        );
+      }
+
       return chatResponse;
     } catch (error) {
       console.error('Error sending message to agent:', error);
@@ -358,6 +398,13 @@ export class AgentService {
    */
   getCurrentSessionId(): string | null {
     return this.currentSessionId;
+  }
+
+  /**
+   * Set current session ID (for loading existing sessions)
+   */
+  setCurrentSession(sessionId: string): void {
+    this.currentSessionId = sessionId;
   }
 
   /**
