@@ -12,6 +12,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgentService, ChatResponse } from '../../services/agent.service';
 import { AuthService } from '../../services/auth.service';
+import { SessionHistoryService } from '../../services/session-history.service';
 import { Subscription } from 'rxjs';
 
 interface ChatMessage {
@@ -425,12 +426,51 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   constructor(
     private agentService: AgentService,
-    private authService: AuthService
+    private authService: AuthService,
+    private sessionHistoryService: SessionHistoryService
   ) {}
 
   ngOnInit() {
     this.addSystemMessage(
       "Welcome to 82ndrop! Describe your video idea and I'll help you create engaging prompts."
+    );
+
+    // Subscribe to Firebase messages for session history
+    this.subscriptions.push(
+      this.sessionHistoryService.messages$.subscribe((firebaseMessages) => {
+        console.log(
+          '🔄 Chat received Firebase messages:',
+          firebaseMessages.length
+        );
+
+        if (firebaseMessages.length > 0) {
+          // Clear current messages and load from Firebase
+          this.messages = [
+            {
+              type: 'system',
+              content: 'Session restored. Continue your conversation below.',
+              timestamp: new Date().toISOString(),
+            },
+          ];
+
+          // Convert Firebase messages to chat messages
+          firebaseMessages.forEach((fbMsg) => {
+            this.messages.push({
+              type: fbMsg.type as 'user' | 'agent' | 'system' | 'progress',
+              content: fbMsg.content,
+              timestamp: new Date(fbMsg.timestamp).toISOString(),
+            });
+          });
+
+          console.log(
+            `✅ Chat loaded ${this.messages.length - 1} messages from Firebase`
+          );
+          this.shouldScrollToBottom = true;
+        } else {
+          // If no messages, show only the welcome message (for new sessions)
+          console.log('📭 No Firebase messages, keeping welcome message only');
+        }
+      })
     );
   }
 

@@ -43,6 +43,7 @@ export class SessionHistoryService {
   private sessionsSubject = new BehaviorSubject<ChatSession[]>([]);
   private currentSessionSubject = new BehaviorSubject<ChatSession | null>(null);
   private messagesSubject = new BehaviorSubject<ChatMessage[]>([]);
+  private currentMessagesListener: (() => void) | null = null; // Track active listener
 
   public sessions$ = this.sessionsSubject.asObservable();
   public currentSession$ = this.currentSessionSubject.asObservable();
@@ -95,7 +96,10 @@ export class SessionHistoryService {
     });
   }
 
-  async createSession(title?: string): Promise<ChatSession> {
+  async createSession(
+    title?: string,
+    adkSessionId?: string
+  ): Promise<ChatSession> {
     const user = this.authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
@@ -111,12 +115,19 @@ export class SessionHistoryService {
     };
 
     const sessionsRef = ref(this.db, `sessions/${user.uid}`);
-    const newSessionRef = push(sessionsRef);
 
-    await set(newSessionRef, sessionData);
+    // Use ADK session ID if provided, otherwise generate new one
+    let sessionRef;
+    if (adkSessionId) {
+      sessionRef = ref(this.db, `sessions/${user.uid}/${adkSessionId}`);
+      await set(sessionRef, sessionData);
+    } else {
+      sessionRef = push(sessionsRef);
+      await set(sessionRef, sessionData);
+    }
 
     const session: ChatSession = {
-      id: newSessionRef.key!,
+      id: adkSessionId || sessionRef.key!,
       ...sessionData,
     };
 
@@ -128,6 +139,18 @@ export class SessionHistoryService {
     const user = this.authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
+    console.log('🔄 Loading session:', sessionId);
+
+    // Remove any existing message listener
+    if (this.currentMessagesListener) {
+      console.log('🗑️ Removing old message listener');
+      this.currentMessagesListener();
+      this.currentMessagesListener = null;
+    }
+
+    // Clear messages immediately to show we're switching sessions
+    this.messagesSubject.next([]);
+
     // Load session info
     const sessionRef = ref(this.db, `sessions/${user.uid}/${sessionId}`);
     const sessionSnapshot = await get(sessionRef);
@@ -137,15 +160,20 @@ export class SessionHistoryService {
         id: sessionId,
         ...sessionSnapshot.val(),
       };
+      console.log('📋 Session info loaded:', session.title);
       this.currentSessionSubject.next(session);
+    } else {
+      console.log('⚠️ Session not found in Firebase:', sessionId);
+      this.currentSessionSubject.next(null);
+      return [];
     }
 
-    // Load messages
+    // Load messages for this specific session
     const messagesRef = ref(this.db, `messages/${sessionId}`);
     const messagesQuery = query(messagesRef, orderByChild('timestamp'));
 
     return new Promise((resolve) => {
-      onValue(
+      const unsubscribe = onValue(
         messagesQuery,
         (snapshot) => {
           const messages: ChatMessage[] = [];
@@ -158,6 +186,11 @@ export class SessionHistoryService {
               } as ChatMessage;
               messages.push(message);
             });
+            console.log(
+              `💬 Loaded ${messages.length} messages for session ${sessionId}`
+            );
+          } else {
+            console.log(`📭 No messages found for session ${sessionId}`);
           }
 
           this.messagesSubject.next(messages);
@@ -165,6 +198,9 @@ export class SessionHistoryService {
         },
         { onlyOnce: true }
       );
+
+      // Store the unsubscribe function
+      this.currentMessagesListener = unsubscribe;
     });
   }
 

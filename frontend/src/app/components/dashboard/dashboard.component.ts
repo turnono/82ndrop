@@ -67,10 +67,25 @@ export class DashboardComponent implements OnInit, OnDestroy {
     console.log('🖱️ BUTTON MOUSE DOWN DETECTED!');
   }
 
-  onSessionSelected(sessionId: string) {
-    console.log('📂 Session selected:', sessionId);
-    // The session will be loaded by the session history service
-    // and the chat component will update automatically
+  async onSessionSelected(sessionId: string) {
+    console.log('🎯 Dashboard: Session selected:', sessionId);
+
+    try {
+      // Set this as the current ADK session
+      console.log('🔧 Setting ADK current session to:', sessionId);
+      this.agentService.setCurrentSession(sessionId);
+
+      // Load the session messages from Firebase
+      console.log('📚 Loading session from Firebase...');
+      await this.sessionHistoryService.loadSession(sessionId);
+
+      // Show chat view if not already visible
+      this.showChat = true;
+
+      console.log('✅ Dashboard: Session loaded successfully');
+    } catch (error) {
+      console.error('❌ Dashboard: Error loading session:', error);
+    }
   }
 
   onNewSessionCreated() {
