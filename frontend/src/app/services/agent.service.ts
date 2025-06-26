@@ -196,7 +196,8 @@ export class AgentService {
       if (Array.isArray(response)) {
         // New logic: Find the response from the video generator agent
         const videoGenEvent = response.find(
-          (event: any) => event.author === 'video_generator_agent' && event.content
+          (event: any) =>
+            event.author === 'video_generator_agent' && event.content
         );
 
         if (
@@ -210,9 +211,13 @@ export class AgentService {
           responseTimestamp = videoGenEvent.timestamp || responseTimestamp;
         } else {
           // Fallback for debugging or if the agent fails
-          console.warn('Could not find response from video_generator_agent. Displaying final event for debugging.');
+          console.warn(
+            'Could not find response from video_generator_agent. Displaying final event for debugging.'
+          );
           const finalEvent = response[response.length - 1];
-          agentContent = finalEvent?.content?.parts?.[0]?.text || JSON.stringify(finalEvent, null, 2);
+          agentContent =
+            finalEvent?.content?.parts?.[0]?.text ||
+            JSON.stringify(finalEvent, null, 2);
           responseTimestamp = finalEvent?.timestamp || responseTimestamp;
         }
       } else if (response && typeof response === 'object') {
@@ -268,69 +273,34 @@ export class AgentService {
   }
 
   /**
-   * Send a message to the 82ndrop agent using ADK's built-in SSE for real-time updates
+   * Send a message to the 82ndrop agent using regular HTTP (fallback from SSE)
    */
   sendMessageWithSSE(
     message: string,
     onUpdate: (update: any) => void,
     onComplete: (finalResponse: ChatResponse) => void,
     onError: (error: any) => void
-  ): () => void { // Returns an unsubscribe function
-    const user = this.authService.getCurrentUser();
-    if (!user) {
-      onError(new Error('User not authenticated'));
-      return () => {};
-    }
+  ): () => void {
+    // For now, use regular sendMessage and simulate streaming
+    let cancelled = false;
 
-    let currentSessionId = this.currentSessionId;
+    this.sendMessage(message)
+      .then((response) => {
+        if (!cancelled) {
+          // Simulate streaming by sending the whole response at once
+          onUpdate({ content: response.response });
+          onComplete(response);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          onError(error);
+        }
+      });
 
-    const getHeaders = async () => {
-      const firebaseUser = this.authService.getFirebaseUser();
-      if (!firebaseUser) throw new Error('Firebase user not available');
-      const token = await firebaseUser.getIdToken();
-      return {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      };
-    };
-
-    const eventSource = new EventSourcePolyfill(`${this.apiUrl}/stream`, {
-      headers: getHeaders(),
-      method: 'POST',
-      body: JSON.stringify({
-        appName: this.appName,
-        userId: user.uid,
-        sessionId: currentSessionId, // Can be null, ADK will create a new one
-        newMessage: {
-          role: 'user',
-          parts: [{ text: message }],
-        },
-      }),
-    });
-
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      onUpdate(data);
-
-      // If this is the first event, we get the session ID
-      if (!currentSessionId && data.session_id) {
-        currentSessionId = data.session_id;
-        this.currentSessionId = data.session_id;
-      }
-    };
-
-    eventSource.onerror = (error) => {
-      onError(error);
-      eventSource.close();
-    };
-
-    // The stream is implicitly closed by the server when the agent is done.
-
-    // Return a function to allow the client to close the connection manually
+    // Return cancel function
     return () => {
-      if (eventSource.readyState !== EventSource.CLOSED) {
-        eventSource.close();
-      }
+      cancelled = true;
     };
   }
 

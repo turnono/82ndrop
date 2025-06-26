@@ -65,3 +65,26 @@ def submit_veo_generation_job(prompt: str) -> str:
             print(f"Could not even update Firebase with failure status: {db_error}")
             
         return f"❌ Failed to submit video generation job. Error: {e}"
+
+def simulate_video_generation(prompt: str) -> str:
+    """
+    Simulates video generation for testing purposes.
+    Returns a mock response indicating the video is being generated.
+    """
+    job_id = str(uuid.uuid4())
+    
+    return f"""🎬 Video Generation Simulation
+    
+Your video prompt has been received and is being processed:
+"{prompt[:100]}..."
+
+📋 Job Details:
+• Job ID: {job_id}
+• Status: Processing
+• Expected completion: 2-3 minutes
+
+This is a simulation mode. In production, this would trigger actual VEO 3 video generation.
+You will be notified when your video is ready!"""
+
+# Export the function directly - ADK will handle tool wrapping
+simulation_video_tool = simulate_video_generation

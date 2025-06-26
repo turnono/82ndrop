@@ -48,13 +48,24 @@ interface ChatMessage {
             <div *ngIf="message.loading" class="spinner"></div>
 
             <!-- Video Player -->
-            <div *ngIf="message.type === 'video' && message.videoUrl" class="video-player-container">
+            <div
+              *ngIf="message.type === 'video' && message.videoUrl"
+              class="video-player-container"
+            >
               <video controls [src]="message.videoUrl"></video>
             </div>
 
             <!-- Confirmation Button -->
-            <div *ngIf="message.showConfirmation" class="confirmation-container">
-              <button (click)="confirmGeneration(message.content)" class="confirm-button">Generate Video</button>
+            <div
+              *ngIf="message.showConfirmation"
+              class="confirmation-container"
+            >
+              <button
+                (click)="confirmGeneration(message.content)"
+                class="confirm-button"
+              >
+                Generate Video
+              </button>
             </div>
 
             <div class="message-timestamp">
@@ -350,60 +361,60 @@ interface ChatMessage {
         }
 
         .workflow-step {
-        font-size: 13px;
-        padding: 4px 12px;
-        border-radius: 14px;
-      }
-
-      .video-loading-indicator {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 10px;
-      }
-
-      .spinner {
-        border: 4px solid rgba(0, 0, 0, 0.1);
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        border-left-color: #667eea;
-        animation: spin 1s ease infinite;
-      }
-
-      @keyframes spin {
-        0% {
-          transform: rotate(0deg);
+          font-size: 13px;
+          padding: 4px 12px;
+          border-radius: 14px;
         }
-        100% {
-          transform: rotate(360deg);
+
+        .video-loading-indicator {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px;
         }
-      }
 
-      .video-player-container video {
-        max-width: 100%;
-        border-radius: 12px;
-      }
+        .spinner {
+          border: 4px solid rgba(0, 0, 0, 0.1);
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border-left-color: #667eea;
+          animation: spin 1s ease infinite;
+        }
 
-      .confirmation-container {
-        margin-top: 12px;
-      }
+        @keyframes spin {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
 
-      .confirm-button {
-        padding: 10px 20px;
-        background: #28a745;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: background-color 0.2s;
-      }
+        .video-player-container video {
+          max-width: 100%;
+          border-radius: 12px;
+        }
 
-      .confirm-button:hover {
-        background: #218838;
-      }
+        .confirmation-container {
+          margin-top: 12px;
+        }
 
-      .json-container {
+        .confirm-button {
+          padding: 10px 20px;
+          background: #28a745;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+
+        .confirm-button:hover {
+          background: #218838;
+        }
+
+        .json-container {
           margin: 16px 0;
           border-radius: 12px;
         }
@@ -478,7 +489,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   isLoading = false;
   private shouldScrollToBottom = false;
 
-  private subscriptions: Subscription[] = [];
+  private subscriptions: Array<Subscription | (() => void)> = [];
 
   constructor(
     private agentService: AgentService,
@@ -531,7 +542,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   ngOnDestroy() {
-    this.subscriptions.forEach((sub) => sub.unsubscribe());
+    this.subscriptions.forEach((sub) => {
+      if (typeof sub === 'function') {
+        sub(); // For unsubscribe functions
+      } else {
+        sub.unsubscribe(); // For RxJS subscriptions
+      }
+    });
   }
 
   ngAfterViewChecked() {
@@ -622,21 +639,22 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       (finalResponse) => {
         agentMessage.loading = false;
         // Check if the response is a prompt that needs confirmation
-        if (agentMessage.content.includes("Shall I proceed")) {
+        if (agentMessage.content.includes('Shall I proceed')) {
           agentMessage.showConfirmation = true;
         }
         this.isLoading = false;
         sseSubscription(); // Unsubscribe
       },
       (error) => {
-        agentMessage.content = "Sorry, an error occurred.";
+        agentMessage.content = 'Sorry, an error occurred.';
         agentMessage.loading = false;
         this.isLoading = false;
         console.error('SSE Error:', error);
         sseSubscription(); // Unsubscribe
       }
     );
-    this.subscriptions.push({ unsubscribe: sseSubscription });
+    // Store the unsubscribe function directly
+    this.subscriptions.push(sseSubscription);
   }
 
   confirmGeneration(prompt: string) {

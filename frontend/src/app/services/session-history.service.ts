@@ -1,19 +1,18 @@
 import { Injectable } from '@angular/core';
+import { AuthService } from './auth.service';
+import { BehaviorSubject, Observable } from 'rxjs';
 import {
   Database,
   ref,
   push,
   set,
   get,
-  child,
   onValue,
   off,
   query,
   orderByChild,
   limitToLast,
-} from 'firebase/database';
-import { AuthService } from './auth.service';
-import { BehaviorSubject, Observable } from 'rxjs';
+} from '@angular/fire/database';
 
 export interface ChatSession {
   id: string;
@@ -39,7 +38,7 @@ export interface ChatMessage {
   providedIn: 'root',
 })
 export class SessionHistoryService {
-  private db!: Database;
+  private db: Database;
   private sessionsSubject = new BehaviorSubject<ChatSession[]>([]);
   private currentSessionSubject = new BehaviorSubject<ChatSession | null>(null);
   private messagesSubject = new BehaviorSubject<ChatMessage[]>([]);
@@ -49,19 +48,21 @@ export class SessionHistoryService {
   public currentSession$ = this.currentSessionSubject.asObservable();
   public messages$ = this.messagesSubject.asObservable();
 
-  constructor(private authService: AuthService) {
-    // Initialize Firebase Database
-    import('firebase/app').then(({ getApp }) => {
-      import('firebase/database').then(({ getDatabase }) => {
-        this.db = getDatabase(getApp());
-        this.initializeRealtimeListeners();
-      });
-    });
+  constructor(private authService: AuthService, db: Database) {
+    // Use constructor injection for Angular Fire Database
+    this.db = db;
+    console.log('✅ Firebase Database initialized successfully');
+    this.initializeRealtimeListeners();
+  }
+
+  private ensureDatabase(): boolean {
+    // Database is always available when injected via Angular Fire
+    return true;
   }
 
   private initializeRealtimeListeners() {
     this.authService.getUser().subscribe((user) => {
-      if (user) {
+      if (user && this.ensureDatabase()) {
         this.loadUserSessions(user.uid);
       } else {
         this.sessionsSubject.next([]);
@@ -72,6 +73,8 @@ export class SessionHistoryService {
   }
 
   private loadUserSessions(userId: string) {
+    if (!this.ensureDatabase()) return;
+
     const sessionsRef = ref(this.db, `sessions/${userId}`);
     const sessionsQuery = query(
       sessionsRef,
@@ -114,6 +117,16 @@ export class SessionHistoryService {
       preview: 'New conversation started',
     };
 
+    // If Firebase Database is not available, return a local session
+    if (!this.ensureDatabase()) {
+      const session: ChatSession = {
+        id: adkSessionId || `session_${now}`,
+        ...sessionData,
+      };
+      this.currentSessionSubject.next(session);
+      return session;
+    }
+
     const sessionsRef = ref(this.db, `sessions/${user.uid}`);
 
     // Use ADK session ID if provided, otherwise generate new one
@@ -140,6 +153,15 @@ export class SessionHistoryService {
     if (!user) throw new Error('User not authenticated');
 
     console.log('🔄 Loading session:', sessionId);
+
+    // If Firebase Database is not available, return empty messages
+    if (!this.ensureDatabase()) {
+      console.log(
+        '📭 Firebase Database not available, returning empty messages'
+      );
+      this.messagesSubject.next([]);
+      return [];
+    }
 
     // Remove any existing message listener
     if (this.currentMessagesListener) {
@@ -211,6 +233,15 @@ export class SessionHistoryService {
     const user = this.authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
+    // If Firebase Database is not available, just log the message
+    if (!this.ensureDatabase()) {
+      console.log(
+        '💬 Saving message (offline mode):',
+        message.content.substring(0, 50)
+      );
+      return;
+    }
+
     const now = Date.now();
     const messageData = {
       ...message,
@@ -250,13 +281,32 @@ export class SessionHistoryService {
     const user = this.authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const sessionRef = ref(this.db, `sessions/${user.uid}/${sessionId}/title`);
-    await set(sessionRef, title);
+    if (!this.ensureDatabase()) {
+      console.log('📝 Updating session title (offline mode):', title);
+      return;
+    }
+
+    const sessionRef = ref(this.db, `sessions/${user.uid}/${sessionId}`);
+    const sessionSnapshot = await get(sessionRef);
+
+    if (sessionSnapshot.exists()) {
+      const sessionData = sessionSnapshot.val();
+      await set(sessionRef, {
+        ...sessionData,
+        title: title,
+        updatedAt: Date.now(),
+      });
+    }
   }
 
   async deleteSession(sessionId: string): Promise<void> {
     const user = this.authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
+
+    if (!this.ensureDatabase()) {
+      console.log('🗑️ Deleting session (offline mode):', sessionId);
+      return;
+    }
 
     // Delete messages
     const messagesRef = ref(this.db, `messages/${sessionId}`);
@@ -289,10 +339,19 @@ export class SessionHistoryService {
   destroy() {
     // Remove Firebase listeners when service is destroyed
     // This prevents memory leaks
+    if (this.currentMessagesListener) {
+      this.currentMessagesListener();
+      this.currentMessagesListener = null;
+    }
   }
 
-  // --- NEW METHOD for Real-time Video Job Updates ---
+  // --- Real-time Video Job Updates ---
   listenForVideoJob(jobId: string): Observable<any> {
+    if (!this.ensureDatabase()) {
+      console.log('📺 Video job listening (offline mode):', jobId);
+      return new BehaviorSubject(null).asObservable();
+    }
+
     const jobRef = ref(this.db, `video_jobs/${jobId}`);
 
     return new Observable((observer) => {

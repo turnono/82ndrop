@@ -1,7 +1,7 @@
 from google.adk import Agent
 from google.adk.tools.agent_tool import AgentTool
-from google.adk.tools import MCPTool
 from .prompts import PROMPT
+from .custom_tools import check_user_access
 from .sub_agents import guide_agent, search_agent, prompt_writer_agent, video_generator_agent
 from .callbacks import (
     before_agent_callback,
@@ -34,12 +34,6 @@ root_agent = Agent(
     # Use tools for utility agents (following proven pattern)
     tools=[
         AgentTool(agent=search_agent),
-        MCPTool(
-            name="check_user_access",
-            mcp_server="localhost:8002", # As per MCP_AUTH_README.md
-            service="firebase_auth",
-            tool="check_user_access",
-            description="Checks if the current user has specific permissions."
-        )
+        check_user_access
     ],
 ) 

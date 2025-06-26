@@ -6,7 +6,8 @@
         ".write": "auth != null && auth.uid == $userId",
         "$sessionId": {
           ".validate": "newData.hasChildren(['title', 'userId', 'createdAt', 'updatedAt', 'messageCount'])"
-        }
+        },
+        ".indexOn": ["updatedAt"]
       }
     },
     "messages": {
