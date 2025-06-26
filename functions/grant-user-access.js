@@ -47,6 +47,30 @@ async function makeUserAdmin(email) {
   return await grantUserAccess(email, "admin");
 }
 
+async function grantVideoPower(email) {
+  const result = await grantUserAccess(email, "admin");
+  if (!result.success) {
+    console.error(`Failed to grant base admin access to ${email}. Aborting video power grant.`);
+    return result;
+  }
+
+  try {
+    const userRecord = await getAuth().getUserByEmail(email);
+    const existingClaims = userRecord.customClaims || {};
+    const newClaims = {
+      ...existingClaims,
+      can_generate_video: true,
+    };
+
+    await getAuth().setCustomUserClaims(userRecord.uid, newClaims);
+    console.log(`✅ Video generation power granted to ${email}`);
+    return { success: true, claims: newClaims };
+  } catch (error) {
+    console.error(`❌ Error granting video power:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
 // Command line usage
 if (require.main === module) {
   const args = process.argv.slice(2);
@@ -56,6 +80,7 @@ if (require.main === module) {
 Usage: 
   node grant-user-access.js <email> [access_level]
   node grant-user-access.js admin <email>
+  node grant-user-access.js video <email>
 
 Examples:
   node grant-user-access.js user@example.com basic
@@ -73,12 +98,15 @@ Access levels: basic, premium, admin
   if (args[0] === "admin" && args[1]) {
     email = args[1];
     accessLevel = "admin";
+    grantUserAccess(email, accessLevel)
+  } else if (args[0] === "video" && args[1]) {
+    email = args[1];
+    grantVideoPower(email)
   } else {
     email = args[0];
     accessLevel = args[1] || "basic";
+    grantUserAccess(email, accessLevel)
   }
-
-  grantUserAccess(email, accessLevel)
     .then((result) => {
       if (result.success) {
         console.log("\n🎉 User access granted successfully!");

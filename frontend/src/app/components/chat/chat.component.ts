@@ -23,6 +23,7 @@ interface ChatMessage {
   workflowSteps?: string[];
   jobId?: string;
   videoUrl?: string;
+  showConfirmation?: boolean;
 }
 
 @Component({
@@ -49,6 +50,11 @@ interface ChatMessage {
             <!-- Video Player -->
             <div *ngIf="message.type === 'video' && message.videoUrl" class="video-player-container">
               <video controls [src]="message.videoUrl"></video>
+            </div>
+
+            <!-- Confirmation Button -->
+            <div *ngIf="message.showConfirmation" class="confirmation-container">
+              <button (click)="confirmGeneration(message.content)" class="confirm-button">Generate Video</button>
             </div>
 
             <div class="message-timestamp">
@@ -379,6 +385,24 @@ interface ChatMessage {
         border-radius: 12px;
       }
 
+      .confirmation-container {
+        margin-top: 12px;
+      }
+
+      .confirm-button {
+        padding: 10px 20px;
+        background: #28a745;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      .confirm-button:hover {
+        background: #218838;
+      }
+
       .json-container {
           margin: 16px 0;
           border-radius: 12px;
@@ -597,6 +621,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       },
       (finalResponse) => {
         agentMessage.loading = false;
+        // Check if the response is a prompt that needs confirmation
+        if (agentMessage.content.includes("Shall I proceed")) {
+          agentMessage.showConfirmation = true;
+        }
         this.isLoading = false;
         sseSubscription(); // Unsubscribe
       },
@@ -609,6 +637,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       }
     );
     this.subscriptions.push({ unsubscribe: sseSubscription });
+  }
+
+  confirmGeneration(prompt: string) {
+    // When the user confirms, we send a new message to the agent
+    // with the original prompt to maintain context.
+    const confirmationMessage = `Yes, please proceed with generating the video for the following prompt:\n\n${prompt}`;
+    this.currentMessage = confirmationMessage;
+    this.sendMessage();
   }
 
   startNewSession() {
