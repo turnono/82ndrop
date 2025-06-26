@@ -1,7 +1,7 @@
 from google.adk import Agent
 from google.adk.tools.agent_tool import AgentTool
 from .prompts import PROMPT
-from .sub_agents import guide_agent, search_agent, prompt_writer_agent
+from .sub_agents import guide_agent, search_agent, prompt_writer_agent, video_generator_agent
 from .callbacks import (
     before_agent_callback,
     after_agent_callback,
@@ -28,7 +28,7 @@ root_agent = Agent(
     after_tool_callback=after_tool_callback,
     
     # Use sub_agents for agents that can be transferred to
-    sub_agents=[guide_agent, prompt_writer_agent],
+    sub_agents=[guide_agent, prompt_writer_agent, video_generator_agent],
     
     # Use tools for utility agents (following proven pattern)
     tools=[AgentTool(agent=search_agent)],

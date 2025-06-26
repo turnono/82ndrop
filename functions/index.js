@@ -16,6 +16,7 @@ setGlobalOptions({ maxInstances: 10 });
 const autoGrantAccess = require("./auto-grant-access");
 const setUserClaims = require("./set-user-claims");
 const grantUserAccess = require("./grant-user-access");
+const handleVideoWebhook = require("./handle-video-webhook"); // Import the new webhook
 
 // Export auto-grant access functions
 exports.autoGrantAccess = autoGrantAccess.autoGrantAccess;
@@ -30,3 +31,6 @@ exports.onUserCreate = setUserClaims.onUserCreate;
 // Export manual user access functions
 exports.grantUserAccess = grantUserAccess.grantUserAccess;
 exports.createTestUser = grantUserAccess.createTestUser;
+
+// Export the video webhook handler
+exports.handleVideoWebhook = handleVideoWebhook.handleVideoWebhook;

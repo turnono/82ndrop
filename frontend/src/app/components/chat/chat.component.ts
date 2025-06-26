@@ -16,11 +16,13 @@ import { SessionHistoryService } from '../../services/session-history.service';
 import { Subscription } from 'rxjs';
 
 interface ChatMessage {
-  type: 'user' | 'agent' | 'system' | 'progress';
+  type: 'user' | 'agent' | 'system' | 'progress' | 'video_loading' | 'video';
   content: string;
   timestamp: string;
   loading?: boolean;
   workflowSteps?: string[];
+  jobId?: string;
+  videoUrl?: string;
 }
 
 @Component({
@@ -41,17 +43,12 @@ interface ChatMessage {
               [innerHTML]="formatMessageText(message.content)"
             ></div>
 
-            <!-- Workflow progress indicator -->
-            <div
-              *ngIf="message.type === 'progress' && message.workflowSteps"
-              class="workflow-steps"
-            >
-              <div
-                *ngFor="let step of message.workflowSteps"
-                class="workflow-step"
-              >
-                {{ step }}
-              </div>
+            <!-- Loading Indicator -->
+            <div *ngIf="message.loading" class="spinner"></div>
+
+            <!-- Video Player -->
+            <div *ngIf="message.type === 'video' && message.videoUrl" class="video-player-container">
+              <video controls [src]="message.videoUrl"></video>
             </div>
 
             <div class="message-timestamp">
@@ -347,12 +344,42 @@ interface ChatMessage {
         }
 
         .workflow-step {
-          font-size: 13px;
-          padding: 4px 12px;
-          border-radius: 14px;
-        }
+        font-size: 13px;
+        padding: 4px 12px;
+        border-radius: 14px;
+      }
 
-        .json-container {
+      .video-loading-indicator {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+      }
+
+      .spinner {
+        border: 4px solid rgba(0, 0, 0, 0.1);
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border-left-color: #667eea;
+        animation: spin 1s ease infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .video-player-container video {
+        max-width: 100%;
+        border-radius: 12px;
+      }
+
+      .json-container {
           margin: 16px 0;
           border-radius: 12px;
         }
@@ -545,75 +572,43 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.currentMessage = '';
     this.isLoading = true;
 
-    // Add user message
     this.addUserMessage(userMessage);
 
-    // Add progress message that will be updated in real-time
-    const progressMessage: ChatMessage = {
-      type: 'progress',
-      content: 'Starting analysis...',
+    const agentMessage: ChatMessage = {
+      type: 'agent',
+      content: '',
       timestamp: new Date().toISOString(),
-      workflowSteps: [],
+      loading: true,
     };
-    this.messages.push(progressMessage);
+    this.messages.push(agentMessage);
     this.shouldScrollToBottom = true;
 
-    try {
-      // Use SSE for real-time updates
-      const response = await this.agentService.sendMessageWithSSE(
-        userMessage,
-        (update) => {
-          // Update progress message in real-time
-          const progressIndex = this.messages.length - 1;
-          if (this.messages[progressIndex]?.type === 'progress') {
-            if (update.type === 'workflow_step') {
-              this.messages[progressIndex].content = update.message;
-              this.messages[progressIndex].workflowSteps = update.agents;
-            } else if (update.type === 'final_response') {
-              // Remove progress message and add final response
-              this.messages.splice(progressIndex, 1);
-              this.addAgentMessage(update.message, update.timestamp);
-
-              // Check if response contains JSON and emit it
-              try {
-                const jsonMatch = update.message.match(
-                  /```json\s*([\s\S]*?)\s*```/
-                );
-                if (jsonMatch) {
-                  const jsonContent = jsonMatch[1];
-                  const parsedJson = JSON.parse(jsonContent);
-                  this.promptGenerated.emit(parsedJson);
-                }
-              } catch (e) {
-                console.log(
-                  'Response does not contain valid JSON, continuing normally'
-                );
-              }
-            }
-            this.shouldScrollToBottom = true;
-          }
+    const sseSubscription = this.agentService.sendMessageWithSSE(
+      userMessage,
+      (update) => {
+        // Append the content of the update to the agent message
+        if (update.content) {
+          agentMessage.content += update.content;
         }
-      );
-
-      console.log('SSE Response received:', response);
-    } catch (error) {
-      console.error('Error sending message:', error);
-
-      // Remove progress message and show error
-      const progressIndex = this.messages.findIndex(
-        (m) => m.type === 'progress'
-      );
-      if (progressIndex >= 0) {
-        this.messages.splice(progressIndex, 1);
+        if (update.type === 'tool_code') {
+          // You can add logic here to display tool calls if you want
+        }
+        this.shouldScrollToBottom = true;
+      },
+      (finalResponse) => {
+        agentMessage.loading = false;
+        this.isLoading = false;
+        sseSubscription(); // Unsubscribe
+      },
+      (error) => {
+        agentMessage.content = "Sorry, an error occurred.";
+        agentMessage.loading = false;
+        this.isLoading = false;
+        console.error('SSE Error:', error);
+        sseSubscription(); // Unsubscribe
       }
-
-      this.addAgentMessage(
-        'Sorry, I encountered an error while processing your request. Please try again.',
-        new Date().toISOString()
-      );
-    } finally {
-      this.isLoading = false;
-    }
+    );
+    this.subscriptions.push({ unsubscribe: sseSubscription });
   }
 
   startNewSession() {

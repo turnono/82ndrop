@@ -290,4 +290,32 @@ export class SessionHistoryService {
     // Remove Firebase listeners when service is destroyed
     // This prevents memory leaks
   }
+
+  // --- NEW METHOD for Real-time Video Job Updates ---
+  listenForVideoJob(jobId: string): Observable<any> {
+    const jobRef = ref(this.db, `video_jobs/${jobId}`);
+
+    return new Observable((observer) => {
+      const unsubscribe = onValue(jobRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const jobData = snapshot.val();
+          console.log(`[Firebase Listener] Job ${jobId} updated:`, jobData);
+          observer.next(jobData); // Emit the updated job data
+
+          // If job is complete or failed, stop listening
+          if (jobData.status === 'complete' || jobData.status === 'failed') {
+            observer.complete(); // Complete the observable stream
+          }
+        } else {
+          console.log(`[Firebase Listener] Job ${jobId} not found yet.`);
+        }
+      });
+
+      // Return a cleanup function to be called on unsubscription
+      return () => {
+        console.log(`[Firebase Listener] Unsubscribing from job ${jobId}`);
+        unsubscribe();
+      };
+    });
+  }
 }

@@ -194,68 +194,26 @@ export class AgentService {
 
       // Handle different response formats
       if (Array.isArray(response)) {
-        // Look for the LAST agent response with actual text content (not function calls)
-        let finalTextResponse = null;
-        let workingAgents: string[] = [];
+        // New logic: Find the response from the video generator agent
+        const videoGenEvent = response.find(
+          (event: any) => event.author === 'video_generator_agent' && event.content
+        );
 
-        // Process all events to build workflow steps and find final response
-        for (const event of response) {
-          if (event.author !== 'user' && event.content) {
-            if (event.content.parts && event.content.parts[0]) {
-              const part = event.content.parts[0];
-
-              // Track function calls (workflow steps)
-              if (part.functionCall) {
-                const funcCall = part.functionCall;
-                const agentName = this.getAgentDisplayName(
-                  funcCall.args?.agent_name || funcCall.name
-                );
-                workingAgents.push(`🤖 ${agentName}`);
-              }
-              // Capture actual text responses
-              else if (part.text && part.text.trim()) {
-                finalTextResponse = {
-                  content: part.text,
-                  author: event.author,
-                  timestamp: event.timestamp,
-                };
-              }
-            }
-          }
-        }
-
-        // Use the final text response if we found one
-        if (finalTextResponse) {
-          agentContent = finalTextResponse.content;
-          responseTimestamp = finalTextResponse.timestamp || responseTimestamp;
-
-          // Add workflow context if we tracked working agents
-          if (workingAgents.length > 0) {
-            const workflowInfo = `🔄 **Workflow:** ${workingAgents.join(
-              ' → '
-            )}\n\n`;
-            agentContent = workflowInfo + agentContent;
-          }
-        } else if (workingAgents.length > 0) {
-          // If we only have function calls, show workflow status
-          agentContent = `🔄 **Multi-Agent Workflow Active**\n\n${workingAgents.join(
-            ' → '
-          )}\n\n⏳ Processing your request...`;
+        if (
+          videoGenEvent &&
+          videoGenEvent.content &&
+          videoGenEvent.content.parts &&
+          videoGenEvent.content.parts[0] &&
+          videoGenEvent.content.parts[0].text
+        ) {
+          agentContent = videoGenEvent.content.parts[0].text;
+          responseTimestamp = videoGenEvent.timestamp || responseTimestamp;
         } else {
-          // Fallback to original logic
-          const agentResponse = response.find(
-            (event: any) => event.author !== 'user' && event.content
-          );
-          if (
-            agentResponse &&
-            agentResponse.content &&
-            agentResponse.content.parts &&
-            agentResponse.content.parts[0]
-          ) {
-            const part = agentResponse.content.parts[0];
-            agentContent = part.text || JSON.stringify(part, null, 2);
-            responseTimestamp = agentResponse.timestamp || responseTimestamp;
-          }
+          // Fallback for debugging or if the agent fails
+          console.warn('Could not find response from video_generator_agent. Displaying final event for debugging.');
+          const finalEvent = response[response.length - 1];
+          agentContent = finalEvent?.content?.parts?.[0]?.text || JSON.stringify(finalEvent, null, 2);
+          responseTimestamp = finalEvent?.timestamp || responseTimestamp;
         }
       } else if (response && typeof response === 'object') {
         agentContent =
@@ -310,61 +268,70 @@ export class AgentService {
   }
 
   /**
-   * Send a message to the 82ndrop agent using SSE for real-time updates
+   * Send a message to the 82ndrop agent using ADK's built-in SSE for real-time updates
    */
-  async sendMessageWithSSE(
+  sendMessageWithSSE(
     message: string,
-    onUpdate: (update: any) => void
-  ): Promise<ChatResponse> {
-    try {
-      // For now, use a fallback approach with simulated progress updates
-      // since the server doesn't have a streaming endpoint yet
-      console.log(
-        'Using fallback approach with regular /run endpoint and simulated progress'
-      );
-
-      // Simulate workflow progress
-      onUpdate({
-        type: 'workflow_step',
-        message: 'Starting analysis...',
-        agents: ['🤖 Guide Agent'],
-        timestamp: new Date().toISOString(),
-      });
-
-      // Small delay to show progress
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      onUpdate({
-        type: 'workflow_step',
-        message: 'Searching for trends...',
-        agents: ['🤖 Guide Agent', '🤖 Search Agent'],
-        timestamp: new Date().toISOString(),
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      onUpdate({
-        type: 'workflow_step',
-        message: 'Creating composition...',
-        agents: ['🤖 Guide Agent', '🤖 Search Agent', '🤖 Prompt Writer Agent'],
-        timestamp: new Date().toISOString(),
-      });
-
-      // Use the existing working sendMessage method
-      const response = await this.sendMessage(message);
-
-      // Send final response update
-      onUpdate({
-        type: 'final_response',
-        message: response.response,
-        timestamp: response.timestamp,
-      });
-
-      return response;
-    } catch (error) {
-      console.error('Error sending message with SSE fallback:', error);
-      throw error;
+    onUpdate: (update: any) => void,
+    onComplete: (finalResponse: ChatResponse) => void,
+    onError: (error: any) => void
+  ): () => void { // Returns an unsubscribe function
+    const user = this.authService.getCurrentUser();
+    if (!user) {
+      onError(new Error('User not authenticated'));
+      return () => {};
     }
+
+    let currentSessionId = this.currentSessionId;
+
+    const getHeaders = async () => {
+      const firebaseUser = this.authService.getFirebaseUser();
+      if (!firebaseUser) throw new Error('Firebase user not available');
+      const token = await firebaseUser.getIdToken();
+      return {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+    };
+
+    const eventSource = new EventSourcePolyfill(`${this.apiUrl}/stream`, {
+      headers: getHeaders(),
+      method: 'POST',
+      body: JSON.stringify({
+        appName: this.appName,
+        userId: user.uid,
+        sessionId: currentSessionId, // Can be null, ADK will create a new one
+        newMessage: {
+          role: 'user',
+          parts: [{ text: message }],
+        },
+      }),
+    });
+
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      onUpdate(data);
+
+      // If this is the first event, we get the session ID
+      if (!currentSessionId && data.session_id) {
+        currentSessionId = data.session_id;
+        this.currentSessionId = data.session_id;
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      onError(error);
+      eventSource.close();
+    };
+
+    // The stream is implicitly closed by the server when the agent is done.
+
+    // Return a function to allow the client to close the connection manually
+    return () => {
+      if (eventSource.readyState !== EventSource.CLOSED) {
+        eventSource.close();
+      }
+    };
   }
 
   /**
