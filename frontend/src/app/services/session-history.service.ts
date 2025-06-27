@@ -11,7 +11,7 @@ import {
   query,
   orderByChild,
   limitToLast,
-} from 'firebase/database';
+} from '@angular/fire/database';
 import { AuthService } from './auth.service';
 import { BehaviorSubject, Observable } from 'rxjs';
 
@@ -39,7 +39,6 @@ export interface ChatMessage {
   providedIn: 'root',
 })
 export class SessionHistoryService {
-  private db!: Database;
   private sessionsSubject = new BehaviorSubject<ChatSession[]>([]);
   private currentSessionSubject = new BehaviorSubject<ChatSession | null>(null);
   private messagesSubject = new BehaviorSubject<ChatMessage[]>([]);
@@ -49,14 +48,8 @@ export class SessionHistoryService {
   public currentSession$ = this.currentSessionSubject.asObservable();
   public messages$ = this.messagesSubject.asObservable();
 
-  constructor(private authService: AuthService) {
-    // Initialize Firebase Database
-    import('firebase/app').then(({ getApp }) => {
-      import('firebase/database').then(({ getDatabase }) => {
-        this.db = getDatabase(getApp());
-        this.initializeRealtimeListeners();
-      });
-    });
+  constructor(private authService: AuthService, private db: Database) {
+    this.initializeRealtimeListeners();
   }
 
   private initializeRealtimeListeners() {
