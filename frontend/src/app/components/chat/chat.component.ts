@@ -47,12 +47,44 @@ interface ChatMessage {
             <!-- Loading Indicator -->
             <div *ngIf="message.loading" class="spinner"></div>
 
+            <!-- Video Loading Status -->
+            <div *ngIf="message.type === 'video_loading'" class="video-loading">
+              <div class="loading-spinner"></div>
+              <div class="loading-text">{{ message.content }}</div>
+              <div *ngIf="message.jobId" class="job-id">
+                Job ID: {{ message.jobId }}
+              </div>
+            </div>
+
             <!-- Video Player -->
             <div
               *ngIf="message.type === 'video' && message.videoUrl"
               class="video-player-container"
             >
-              <video controls [src]="message.videoUrl"></video>
+              <div class="video-header">
+                <span class="video-title">{{ message.content }}</span>
+                <button
+                  class="download-video-btn"
+                  (click)="
+                    downloadVideo(message.videoUrl!, message.jobId || 'video')
+                  "
+                  title="Download Video"
+                >
+                  📥 Download
+                </button>
+              </div>
+              <video controls [src]="message.videoUrl" preload="metadata">
+                <source [src]="message.videoUrl" type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+              <div class="video-info">
+                <span *ngIf="message.jobId" class="job-id"
+                  >Job ID: {{ message.jobId }}</span
+                >
+                <span class="video-timestamp">{{
+                  formatTimestamp(message.timestamp)
+                }}</span>
+              </div>
             </div>
 
             <!-- Confirmation Button -->
@@ -476,6 +508,120 @@ interface ChatMessage {
           font-size: 14px;
         }
       }
+
+      /* Enhanced Video Generation Styles */
+      .video-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border-radius: 18px;
+        margin: 10px 0;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      }
+
+      .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top: 4px solid white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 15px;
+      }
+
+      .loading-text {
+        font-weight: 600;
+        margin-bottom: 8px;
+        text-align: center;
+      }
+
+      .job-id {
+        font-size: 11px;
+        opacity: 0.8;
+        font-family: monospace;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 4px 8px;
+        border-radius: 4px;
+      }
+
+      .video-player-container {
+        border: 2px solid #28a745;
+        border-radius: 18px;
+        overflow: hidden;
+        background: white;
+        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.2);
+        margin: 10px 0;
+      }
+
+      .video-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #28a745, #20c997);
+        color: white;
+      }
+
+      .video-title {
+        font-weight: 600;
+        font-size: 14px;
+      }
+
+      .download-video-btn {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 11px;
+        transition: all 0.2s;
+        backdrop-filter: blur(10px);
+      }
+
+      .download-video-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: translateY(-1px);
+      }
+
+      .video-player-container video {
+        width: 100%;
+        max-height: 400px;
+        display: block;
+        background: #000;
+      }
+
+      .video-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 16px;
+        background: #f8f9fa;
+        font-size: 11px;
+      }
+
+      .video-timestamp {
+        color: #6c757d;
+        font-weight: 500;
+      }
+
+      /* Message type specific styling */
+      .message.video_loading .message-content {
+        background: transparent;
+        border: none;
+        padding: 0;
+        box-shadow: none;
+      }
+
+      .message.video .message-content {
+        background: transparent;
+        border: none;
+        padding: 0;
+        box-shadow: none;
+      }
     `,
   ],
 })
@@ -638,10 +784,35 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       },
       (finalResponse) => {
         agentMessage.loading = false;
+
+        // Check if the response contains a video generation job ID
+        const jobIdMatch = agentMessage.content.match(
+          /Job ID is: ([a-f0-9-]+)/i
+        );
+        if (jobIdMatch) {
+          const jobId = jobIdMatch[1];
+          console.log('🎬 Video generation job detected:', jobId);
+
+          // Basic content safety check
+          if (this.checkContentSafety(agentMessage.content)) {
+            // Add video loading message
+            this.addVideoLoadingMessage(jobId);
+
+            // Start tracking the video job
+            this.trackVideoJob(jobId);
+          } else {
+            console.warn('⚠️ Content safety check failed for job:', jobId);
+            this.addSystemMessage(
+              '⚠️ Video generation blocked: Content may violate our safety guidelines. Please try a different prompt.'
+            );
+          }
+        }
+
         // Check if the response is a prompt that needs confirmation
         if (agentMessage.content.includes('Shall I proceed')) {
           agentMessage.showConfirmation = true;
         }
+
         this.isLoading = false;
         sseSubscription(); // Unsubscribe
       },
@@ -709,5 +880,167 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         </div>`;
       }) // JSON blocks with copy button
       .replace(/`(.*?)`/g, '<code>$1</code>'); // Inline code
+  }
+
+  // --- Video Generation Methods ---
+
+  private addVideoLoadingMessage(jobId: string) {
+    const loadingMessage: ChatMessage = {
+      type: 'video_loading',
+      content: '🎬 Generating your video... This may take a few minutes.',
+      timestamp: new Date().toISOString(),
+      jobId: jobId,
+      loading: true,
+    };
+
+    this.messages.push(loadingMessage);
+    this.shouldScrollToBottom = true;
+  }
+
+  private trackVideoJob(jobId: string) {
+    console.log('📺 Starting video job tracking for:', jobId);
+
+    // Subscribe to Firebase real-time updates for this job
+    const jobSubscription = this.sessionHistoryService
+      .listenForVideoJob(jobId)
+      .subscribe({
+        next: (jobData) => {
+          console.log('📹 Video job update received:', jobData);
+          this.handleVideoJobUpdate(jobId, jobData);
+        },
+        error: (error) => {
+          console.error('❌ Video job tracking error:', error);
+          this.handleVideoJobError(jobId, error);
+        },
+        complete: () => {
+          console.log('✅ Video job tracking completed for:', jobId);
+        },
+      });
+
+    this.subscriptions.push(jobSubscription);
+  }
+
+  private handleVideoJobUpdate(jobId: string, jobData: any) {
+    // Find the loading message for this job
+    const loadingMessageIndex = this.messages.findIndex(
+      (msg) => msg.jobId === jobId && msg.type === 'video_loading'
+    );
+
+    if (loadingMessageIndex === -1) {
+      console.warn('⚠️ Could not find loading message for job:', jobId);
+      return;
+    }
+
+    const loadingMessage = this.messages[loadingMessageIndex];
+
+    switch (jobData.status) {
+      case 'pending':
+        loadingMessage.content = '⏳ Video generation queued...';
+        break;
+
+      case 'processing':
+        loadingMessage.content = '🎬 Creating your video... Please wait.';
+        break;
+
+      case 'complete':
+        // Replace loading message with video message
+        this.messages[loadingMessageIndex] = {
+          type: 'video',
+          content: '🎉 Your video is ready!',
+          timestamp: new Date().toISOString(),
+          jobId: jobId,
+          videoUrl: jobData.videoUrl || jobData.video_url,
+        };
+        break;
+
+      case 'failed':
+        this.messages[loadingMessageIndex] = {
+          type: 'system',
+          content: `❌ Video generation failed: ${
+            jobData.error || 'Unknown error'
+          }`,
+          timestamp: new Date().toISOString(),
+        };
+        break;
+
+      default:
+        console.log('🔄 Job status update:', jobData.status);
+        loadingMessage.content = `🔄 Status: ${jobData.status}`;
+    }
+
+    this.shouldScrollToBottom = true;
+  }
+
+  private handleVideoJobError(jobId: string, error: any) {
+    // Find and update the loading message
+    const loadingMessageIndex = this.messages.findIndex(
+      (msg) => msg.jobId === jobId && msg.type === 'video_loading'
+    );
+
+    if (loadingMessageIndex !== -1) {
+      this.messages[loadingMessageIndex] = {
+        type: 'system',
+        content:
+          '❌ Unable to track video generation. Please check back later.',
+        timestamp: new Date().toISOString(),
+      };
+      this.shouldScrollToBottom = true;
+    }
+  }
+
+  downloadVideo(videoUrl: string, filename: string) {
+    try {
+      const link = document.createElement('a');
+      link.href = videoUrl;
+      link.download = `82ndrop-${filename}.mp4`;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      console.log('📥 Video download initiated');
+    } catch (error) {
+      console.error('❌ Video download failed:', error);
+      // Fallback: open in new tab
+      window.open(videoUrl, '_blank');
+    }
+  }
+
+  private checkContentSafety(content: string): boolean {
+    // Basic content safety checks
+    const lowercaseContent = content.toLowerCase();
+
+    // List of prohibited keywords (this should be much more comprehensive in production)
+    const prohibitedKeywords = [
+      'violence',
+      'hate',
+      'harassment',
+      'bullying',
+      'abuse',
+      'explicit',
+      'nsfw',
+      'adult',
+      'sexual',
+      'inappropriate',
+      'harmful',
+      'dangerous',
+      'illegal',
+      'weapon',
+      'drug',
+    ];
+
+    // Check for prohibited content
+    for (const keyword of prohibitedKeywords) {
+      if (lowercaseContent.includes(keyword)) {
+        console.warn(`🚫 Content safety violation detected: "${keyword}"`);
+        return false;
+      }
+    }
+
+    // Additional checks can be added here
+    // - Length checks (too short/long)
+    // - Spam detection
+    // - External API calls for AI-based content moderation
+
+    return true; // Content appears safe
   }
 }
