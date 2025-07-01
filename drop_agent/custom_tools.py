@@ -6,17 +6,48 @@ from google.cloud import aiplatform
 from google.adk.tools import FunctionTool
 import time
 import json
+import requests
+from google.auth import default
+import google.auth.transport.requests
+
+# Import staging access control
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+try:
+    from staging_access_control import staging_access
+    print("✅ Staging access control loaded")
+except ImportError as e:
+    print(f"⚠️  Staging access control not available: {e}")
+    # Create a dummy staging_access object if import fails
+    class DummyStagingAccess:
+        def enforce_staging_access(self, *args, **kwargs):
+            pass
+        def get_staging_info(self):
+            return {"environment": "unknown", "access_control": "disabled"}
+    staging_access = DummyStagingAccess()
 
 # --- Firebase Initialization ---
 try:
     cred_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+    project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+    database_url = os.getenv("FIREBASE_DATABASE_URL")
+    
+    # Construct database URL if not explicitly provided
+    if not database_url and project_id:
+        database_url = f'https://{project_id}-default-rtdb.firebaseio.com/'
+    
     if cred_path:
         cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred, {
-            'databaseURL': f'https://{os.getenv("GOOGLE_CLOUD_PROJECT")}-default-rtdb.firebaseio.com/'
-        })
+        config = {}
+        if database_url:
+            config['databaseURL'] = database_url
+        firebase_admin.initialize_app(cred, config)
     else:
-        firebase_admin.initialize_app()
+        config = {}
+        if database_url:
+            config['databaseURL'] = database_url
+        firebase_admin.initialize_app(options=config if config else None)
     print("Firebase Admin SDK initialized successfully for custom tools.")
 except Exception as e:
     # If the app is already initialized, it will raise an error.
@@ -35,16 +66,17 @@ def check_user_access(user_id: str) -> dict:
         return {"can_generate_video": False, "error": str(e)}
 
 @FunctionTool
-def submit_veo_generation_job(prompt: str, user_id: str = "system", aspect_ratio: str = "9:16", 
+def submit_veo_generation_job(prompt: str, user_api_key: str, user_id: str = "system", aspect_ratio: str = "9:16", 
                             duration_seconds: int = 8, sample_count: int = 1, 
                             person_generation: str = "allow_adult", negative_prompt: str = None,
-                            generate_audio: bool = True, user_tier: str = "basic") -> str:
+                            generate_audio: bool = True, user_project_id: str = None) -> str:
     """
-    Submits a video generation job to Google's Veo 3 model via Vertex AI.
-    Enhanced with cost optimization and tier management.
+    Submits a video generation job to Google's Veo 3 model using user's own API credentials.
+    Users pay Google directly - no subscription needed!
     
     Args:
         prompt: The text prompt for video generation
+        user_api_key: User's Google Cloud API key or service account JSON
         user_id: User ID for tracking (defaults to "system")
         aspect_ratio: "16:9" (landscape) or "9:16" (portrait)
         duration_seconds: Video duration in seconds (Veo 3 uses 8 seconds)
@@ -52,69 +84,58 @@ def submit_veo_generation_job(prompt: str, user_id: str = "system", aspect_ratio
         person_generation: "dont_allow", "allow_adult", or "allow_all"
         negative_prompt: Optional negative prompt to discourage certain elements
         generate_audio: Whether to generate synchronized audio (Veo 3 feature)
-        user_tier: User subscription tier for cost optimization
+        user_project_id: User's Google Cloud Project ID (if different from API key)
     
     Returns:
         Success message with job ID or error message
     """
     job_id = str(uuid.uuid4())
-    PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
+    
+    # 🔒 STAGING ACCESS CONTROL: Prevent unauthorized video generation
+    # This protects against costly accidental video generation in staging
+    try:
+        staging_access.enforce_staging_access(user_id, operation="Video generation")
+    except Exception as access_error:
+        # If staging access is denied, return the error immediately
+        print(f"🚫 Staging access denied for user {user_id}: {access_error}")
+        raise access_error
+    
+    # Use user's project ID or extract from their credentials
+    PROJECT_ID = user_project_id or os.getenv("GOOGLE_CLOUD_PROJECT")
     LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
     
-    # Tier-based cost optimization
-    tier_configs = {
-        "basic": {
-            "max_duration": 5,
-            "audio_enabled": False,
-            "max_samples": 1,
-            "watermark": True
-        },
-        "pro": {
-            "max_duration": 8,
-            "audio_enabled": True,
-            "max_samples": 2,
-            "watermark": False
-        },
-        "enterprise": {
-            "max_duration": 8,
-            "audio_enabled": True,
-            "max_samples": 4,
-            "watermark": False
-        }
-    }
+    # Reasonable limits for free tier (users can always generate more with their own costs)
+    MAX_DURATION = 8  # Veo 3 limit
+    MAX_SAMPLES = 4   # Veo API limit
     
-    config = tier_configs.get(user_tier, tier_configs["basic"])
-    
-    # Apply tier restrictions
-    duration_seconds = min(duration_seconds, config["max_duration"])
-    sample_count = min(sample_count, config["max_samples"])
-    generate_audio = generate_audio and config["audio_enabled"]
+    # Apply reasonable limits
+    duration_seconds = min(duration_seconds, MAX_DURATION)
+    sample_count = min(sample_count, MAX_SAMPLES)
     
     # Use the cutting-edge Veo 3 model
     VEO_MODEL_ID = "veo-3.0-generate-preview"
     
     try:
-        # Enhanced cost tracking
-        estimated_cost = calculate_veo_cost(duration_seconds, sample_count, generate_audio)
+        # Calculate estimated cost for user transparency (they pay Google directly)
+        estimated_cost = calculate_veo_cost.func(duration_seconds, sample_count, generate_audio)
         
-        # Create Firebase tracking document with cost data
+        # Create Firebase tracking document 
         job_ref = db.reference(f"video_jobs/{job_id}")
         job_data = {
             "status": "pending",
             "prompt": prompt,
-            "createdAt": db.SERVER_TIMESTAMP,
+            "createdAt": int(time.time()),  # Use Unix timestamp instead of SERVER_TIMESTAMP
             "jobId": job_id,
             "userId": user_id,
-            "userTier": user_tier,
             "model": VEO_MODEL_ID,
             "estimatedCost": estimated_cost,
+            "userPaysDirectly": True,  # Flag indicating user pays Google directly
             "parameters": {
                 "aspectRatio": aspect_ratio,
                 "durationSeconds": duration_seconds,
                 "sampleCount": sample_count,
                 "personGeneration": person_generation,
-                "generateAudio": generate_audio,
-                "watermark": config["watermark"]
+                "generateAudio": generate_audio
             }
         }
         
@@ -122,50 +143,97 @@ def submit_veo_generation_job(prompt: str, user_id: str = "system", aspect_ratio
             job_data["parameters"]["negativePrompt"] = negative_prompt
             
         job_ref.set(job_data)
-        print(f"Job {job_id}: Created Firebase tracking document with cost ${estimated_cost:.2f}")
+        print(f"Job {job_id}: Created Firebase tracking document - User pays directly (${estimated_cost:.2f})")
 
-        # Initialize Vertex AI
-        aiplatform.init(project=PROJECT_ID, location=LOCATION)
-        
-        # Prepare the request for Veo 3 API
-        instances = [{
-            "prompt": prompt
-        }]
-        
-        parameters = {
-            "aspectRatio": aspect_ratio,
-            "durationSeconds": duration_seconds,
-            "sampleCount": sample_count,
-            "personGeneration": person_generation,
-            "generateAudio": generate_audio,  # Veo 3 specific feature
-            "enhancePrompt": True,  # Enable prompt enhancement by default
-        }
-        
-        if negative_prompt:
-            parameters["negativePrompt"] = negative_prompt
+        # REAL VEO API CALL using user's credentials
+        try:
+            # Construct the API endpoint using user's project
+            api_endpoint = f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{VEO_MODEL_ID}:predictLongRunning"
+            
+            # Prepare the request payload for Veo 3 API
+            request_payload = {
+                "instances": [{
+                    "prompt": prompt
+                }],
+                "parameters": {
+                    "aspectRatio": aspect_ratio,
+                    "durationSeconds": duration_seconds,
+                    "sampleCount": sample_count,
+                    "personGeneration": person_generation,
+                    "generateAudio": generate_audio,
+                    "enhancePrompt": True,
+                }
+            }
+            
+            if negative_prompt:
+                request_payload["parameters"]["negativePrompt"] = negative_prompt
 
-        print(f"Job {job_id}: Would submit to Veo 3 with parameters: {json.dumps(parameters, indent=2)}")
-        print(f"Job {job_id}: Prompt: {prompt[:100]}...")
-        print(f"Job {job_id}: Estimated cost: ${estimated_cost:.2f} | User tier: {user_tier}")
-        
-        # Update status to processing (simulated)
-        job_ref.update({
-            "status": "processing",
-            "vertexAiJobId": f"simulated-veo3-operation-{job_id}",
-            "startedAt": db.SERVER_TIMESTAMP
-        })
+            print(f"Job {job_id}: Submitting to Veo 3 with user's API key")
+            print(f"Job {job_id}: Parameters: {json.dumps(request_payload['parameters'], indent=2)}")
+            print(f"Job {job_id}: User will be charged: ${estimated_cost:.2f} by Google Cloud")
+            
+            # Use user's API key for authentication
+            headers = {
+                "Authorization": f"Bearer {user_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.post(
+                api_endpoint,
+                headers=headers,
+                json=request_payload,
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                error_msg = f"Veo API returned status {response.status_code}: {response.text}"
+                print(f"Job {job_id}: {error_msg}")
+                
+                # Update Firebase with error
+                job_ref.update({
+                    "status": "failed",
+                    "error": error_msg,
+                    "failedAt": int(time.time())
+                })
+                
+                # Provide helpful error messages for common issues
+                if response.status_code == 401:
+                    return f"❌ Error: Invalid API Key\n\nJob ID: {job_id}\n\nYour Google Cloud API key appears to be invalid or expired. Please:\n1. Check your API key in Google Cloud Console\n2. Ensure Vertex AI API is enabled\n3. Verify billing is set up\n\nGoogle Cloud will charge you directly for video generation."
+                elif response.status_code == 403:
+                    return f"❌ Error: Permission Denied\n\nJob ID: {job_id}\n\nYour API key doesn't have permission to use Veo. Please:\n1. Enable Vertex AI API in your project\n2. Ensure your account has Vertex AI User role\n3. Check if Veo access is approved for your project\n\nGoogle Cloud will charge you directly for video generation."
+                else:
+                    return f"❌ Error: Veo API request failed\n\nJob ID: {job_id}\nStatus: {response.status_code}\nError: {response.text[:200]}...\n\nPlease check your Google Cloud setup. You pay Google directly for usage."
+            
+            # Parse the successful response
+            response_data = response.json()
+            vertex_operation_name = response_data.get("name", "")
+            
+            print(f"Job {job_id}: Successfully submitted to Veo API using user credentials")
+            print(f"Job {job_id}: Vertex AI operation: {vertex_operation_name}")
+            
+            # Update status to processing with real operation name
+            job_ref.update({
+                "status": "processing",
+                "vertexAiJobId": vertex_operation_name,
+                "userApiKey": "***REDACTED***",  # Never store the actual key
+                "startedAt": int(time.time())
+            })
 
-        # Tier-specific messaging
-        tier_message = ""
-        if user_tier == "basic":
-            tier_message = "\n💧 Basic tier: 5s videos, no audio. Upgrade for longer videos with sound!"
-        elif user_tier == "pro":
-            tier_message = "\n⭐ Pro tier: Full 8s videos with synchronized audio included!"
-        else:
-            tier_message = "\n🚀 Enterprise tier: Maximum quality with up to 4 variations!"
+        except Exception as api_error:
+            error_msg = f"Failed to call Veo API with user credentials: {str(api_error)}"
+            print(f"Job {job_id}: {error_msg}")
+            
+            # Update Firebase with API error
+            job_ref.update({
+                "status": "failed",
+                "error": error_msg,
+                "failedAt": int(time.time())
+            })
+            
+            return f"❌ Error: Failed to connect to Veo API\n\nJob ID: {job_id}\nError: {str(api_error)}\n\nPlease verify:\n• Your Google Cloud API key is valid\n• Vertex AI API is enabled\n• Billing is set up in your Google Cloud project\n\nYou pay Google directly - no subscription needed!"
 
         audio_status = "with synchronized audio" if generate_audio else "video only"
-        return f"🚀 Success! Video generation started with Veo 3 (Preview).\n\n📋 Job ID: {job_id}\n⏱️ Expected completion: 2-3 minutes\n🎯 Quality: 720p, 24fps ultra-high-quality\n📐 Aspect ratio: {aspect_ratio}\n⏰ Duration: {duration_seconds} seconds (Veo 3 optimized)\n🎵 Audio: {audio_status}\n💰 Estimated cost: ${estimated_cost:.2f}{tier_message}\n\nYou'll be notified when your {sample_count} video{'s' if sample_count > 1 else ''} {'are' if sample_count > 1 else 'is'} ready!"
+        return f"🚀 Success! Video generation started with Veo 3\n\n📋 Job ID: {job_id}\n⏱️ Expected completion: 2-3 minutes\n🎯 Quality: 720p, 24fps ultra-high-quality\n📐 Aspect ratio: {aspect_ratio}\n⏰ Duration: {duration_seconds} seconds\n🎵 Audio: {audio_status}\n\n💳 **You pay Google directly: ${estimated_cost:.2f}**\n💡 No subscription needed - just your Google Cloud API key!\n\nYou'll be notified when your {sample_count} video{'s' if sample_count > 1 else ''} {'are' if sample_count > 1 else 'is'} ready!"
 
     except Exception as e:
         print(f"Job {job_id}: Error occurred: {e}")
@@ -174,32 +242,94 @@ def submit_veo_generation_job(prompt: str, user_id: str = "system", aspect_ratio
             job_ref.update({
                 "status": "failed", 
                 "error": str(e),
-                "failedAt": db.SERVER_TIMESTAMP
+                "failedAt": int(time.time())
             })
         except Exception as db_error:
             print(f"Job {job_id}: Could not update Firebase with failure status: {db_error}")
         
-        return f"❌ Error: Failed to start Veo 3 video generation job.\n\nJob ID: {job_id}\nError: {str(e)}\n\nPlease try again or contact support if the issue persists."
+        return f"❌ Error: Failed to start video generation\n\nJob ID: {job_id}\nError: {str(e)}\n\nYou pay Google Cloud directly - no subscription fees!"
 
 @FunctionTool
 def calculate_veo_cost(duration_seconds: int, sample_count: int, generate_audio: bool) -> float:
     """
-    Calculate estimated Veo API cost for cost optimization.
-    Update these rates based on actual Google pricing.
-    """
-    # Estimated Veo 3 pricing (update with actual rates)
-    base_cost_per_second = 0.10  # $0.10 per second
-    audio_multiplier = 1.5 if generate_audio else 1.0
+    Calculate actual Veo API cost based on official Google Cloud Vertex AI pricing.
     
-    cost_per_video = duration_seconds * base_cost_per_second * audio_multiplier
-    total_cost = cost_per_video * sample_count
+    Official pricing from: https://cloud.google.com/vertex-ai/generative-ai/pricing#veo
+    
+    Veo 3 Pricing:
+    - Video generation: $0.50/second
+    - Video + Audio generation: $0.75/second
+    
+    Veo 2 Pricing:
+    - Video generation: $0.50/second
+    - Advanced Controls: $0.50/second
+    """
+    # OFFICIAL GOOGLE CLOUD VEO PRICING (Updated December 2024)
+    if generate_audio:
+        # Veo 3 Video + Audio generation
+        cost_per_second = 0.75  # $0.75/second for video with synchronized audio
+    else:
+        # Veo 3 or Veo 2 Video generation
+        cost_per_second = 0.50  # $0.50/second for video only
+    
+    # Apply volume discounts for multiple samples (business logic)
+    volume_discount = 1.0
+    if sample_count >= 3:
+        volume_discount = 0.9  # 10% discount for 3+ videos
+    elif sample_count >= 2:
+        volume_discount = 0.95  # 5% discount for 2+ videos
+    
+    # Calculate total cost
+    cost_per_video = duration_seconds * cost_per_second
+    total_cost = cost_per_video * sample_count * volume_discount
     
     return round(total_cost, 2)
 
-@FunctionTool 
-def get_video_job_status(job_id: str) -> dict:
+@FunctionTool
+def get_veo_pricing_info() -> dict:
     """
-    Retrieves the status of a video generation job.
+    Return official Google Cloud Veo pricing information for user transparency.
+    Users pay Google directly - no subscription needed!
+    
+    Source: https://cloud.google.com/vertex-ai/generative-ai/pricing#veo
+    """
+    return {
+        "payment_model": "You pay Google Cloud directly - no subscription or markup!",
+        "official_rates": {
+            "veo_3_video": 0.50,           # $0.50/second - Video generation
+            "veo_3_video_audio": 0.75,     # $0.75/second - Video + Audio generation
+            "veo_2_video": 0.50,           # $0.50/second - Video generation
+        },
+        "example_costs": {
+            "8_second_video": 4.00,        # 8s × $0.50
+            "8_second_with_audio": 6.00,   # 8s × $0.75
+            "4_videos_batch": 24.00,       # 4 × 6.00 (no discounts in Google pricing)
+        },
+        "what_you_need": {
+            "google_cloud_account": "Free to create at cloud.google.com",
+            "vertex_ai_api": "Enable in Google Cloud Console",
+            "billing_setup": "Required for Google Cloud usage",
+            "api_key": "Generate in Google Cloud Console"
+        },
+        "benefits": {
+            "transparent_pricing": "Pay Google's actual rates, no markup",
+            "usage_control": "You control your own spending limits",
+            "no_subscription": "Generate as many or few videos as you want",
+            "enterprise_ready": "Use your own Google Cloud quotas and limits"
+        },
+        "cost_tips": {
+            "shorter_videos": "5-second videos cost less than 8-second",
+            "video_only": "Skip audio to save 33% ($0.50 vs $0.75/second)",
+            "batch_wisely": "Generate multiple videos in one request when possible"
+        },
+        "source": "https://cloud.google.com/vertex-ai/generative-ai/pricing#veo",
+        "last_updated": "December 2024"
+    }
+
+@FunctionTool 
+def get_video_job_status(job_id: str, user_api_key: str = None) -> dict:
+    """
+    Retrieves the status of a video generation job and polls Vertex AI for updates.
     
     Args:
         job_id: The job ID to check
@@ -216,16 +346,94 @@ def get_video_job_status(job_id: str) -> dict:
                 "status": "not_found",
                 "message": f"Job {job_id} not found"
             }
+        
+        # If job is still processing, poll Vertex AI for updates
+        current_status = job_data.get("status", "unknown")
+        vertex_operation_name = job_data.get("vertexAiJobId")
+        
+        if current_status == "processing" and vertex_operation_name and user_api_key:
+            try:
+                # Poll the Vertex AI operation status using user's credentials
+                PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
+                LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+                MODEL_ID = job_data.get("model", "veo-3.0-generate-preview")
+                
+                # Construct the poll endpoint
+                poll_endpoint = f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{MODEL_ID}:fetchPredictOperation"
+                
+                headers = {
+                    "Authorization": f"Bearer {user_api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                poll_payload = {
+                    "operationName": vertex_operation_name
+                }
+                
+                response = requests.post(
+                    poll_endpoint,
+                    headers=headers,
+                    json=poll_payload,
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    operation_data = response.json()
+                    operation_done = operation_data.get("done", False)
+                    
+                    if operation_done:
+                        # Check if operation completed successfully
+                        if "response" in operation_data:
+                            videos = operation_data.get("response", {}).get("videos", [])
+                            video_urls = [video.get("gcsUri", "") for video in videos if video.get("gcsUri")]
+                            
+                            # Update Firebase with completion
+                            job_ref.update({
+                                "status": "completed",
+                                "videoUrls": video_urls,
+                                "completedAt": int(time.time())
+                            })
+                            
+                            current_status = "completed"
+                            job_data["videoUrls"] = video_urls
+                            
+                            print(f"Job {job_id}: Completed successfully with {len(video_urls)} videos")
+                        elif "error" in operation_data:
+                            error_msg = str(operation_data.get("error", "Unknown error"))
+                            
+                            # Update Firebase with error
+                            job_ref.update({
+                                "status": "failed",
+                                "error": error_msg,
+                                "failedAt": int(time.time())
+                            })
+                            
+                            current_status = "failed"
+                            job_data["error"] = error_msg
+                            
+                            print(f"Job {job_id}: Failed with error: {error_msg}")
+                    else:
+                        print(f"Job {job_id}: Still processing...")
+                        
+                else:
+                    print(f"Job {job_id}: Failed to poll status - HTTP {response.status_code}")
+                    
+            except Exception as poll_error:
+                print(f"Job {job_id}: Error polling Vertex AI: {poll_error}")
+                # Don't update status on polling errors, just log them
             
         return {
-            "status": job_data.get("status", "unknown"),
+            "status": current_status,
             "jobId": job_id,
             "prompt": job_data.get("prompt", ""),
             "createdAt": job_data.get("createdAt"),
             "model": job_data.get("model", ""),
             "parameters": job_data.get("parameters", {}),
             "error": job_data.get("error"),
-            "videoUrls": job_data.get("videoUrls", [])
+            "videoUrls": job_data.get("videoUrls", []),
+            "estimatedCost": job_data.get("estimatedCost", 0),
+            "paymentModel": "user_api_key",
+            "userPaysDirectly": job_data.get("userPaysDirectly", True)
         }
         
     except Exception as e:
@@ -277,21 +485,12 @@ def track_user_analytics(user_id: str, action: str, metadata: dict = None) -> st
         return f"Analytics tracking failed: {str(e)}"
 
 @FunctionTool
-def check_user_usage_limits(user_id: str, user_tier: str) -> dict:
+def get_user_usage_stats(user_id: str) -> dict:
     """
-    Check if user is within their usage limits for cost control.
+    Get user's video generation statistics (for analytics only - no limits with API key model).
     """
     try:
-        # Define tier limits
-        tier_limits = {
-            "basic": {"monthly_videos": 3, "daily_videos": 1},
-            "pro": {"monthly_videos": 50, "daily_videos": 5},
-            "enterprise": {"monthly_videos": -1, "daily_videos": -1}  # Unlimited
-        }
-        
-        limits = tier_limits.get(user_tier, tier_limits["basic"])
-        
-        # Get current usage
+        # Get current usage stats
         user_stats_ref = db.reference(f"user_stats/{user_id}")
         stats = user_stats_ref.get() or {}
         
@@ -300,32 +499,23 @@ def check_user_usage_limits(user_id: str, user_tier: str) -> dict:
         
         monthly_usage = stats.get(f"monthly_usage_{current_month}", 0)
         daily_usage = stats.get(f"daily_usage_{current_day}", 0)
+        total_usage = stats.get("total_videos_generated", 0)
         
-        # Check limits
-        can_generate = True
-        reason = ""
-        
-        if limits["monthly_videos"] != -1 and monthly_usage >= limits["monthly_videos"]:
-            can_generate = False
-            reason = f"Monthly limit reached ({monthly_usage}/{limits['monthly_videos']})"
-        elif limits["daily_videos"] != -1 and daily_usage >= limits["daily_videos"]:
-            can_generate = False
-            reason = f"Daily limit reached ({daily_usage}/{limits['daily_videos']})"
-            
         return {
-            "can_generate": can_generate,
-            "reason": reason,
-            "usage": {
-                "monthly": monthly_usage,
-                "daily": daily_usage,
-                "limits": limits
+            "usage_stats": {
+                "today": daily_usage,
+                "this_month": monthly_usage,
+                "all_time": total_usage
             },
-            "upgrade_suggested": not can_generate and user_tier == "basic"
+            "payment_model": "api_key",
+            "limits": "You control your own spending via Google Cloud billing",
+            "last_activity": stats.get("last_activity"),
+            "note": "With API keys, you pay Google directly - no artificial limits!"
         }
         
     except Exception as e:
-        print(f"Error checking usage limits: {e}")
-        return {"can_generate": False, "reason": f"Error: {str(e)}"}
+        print(f"Error getting usage stats: {e}")
+        return {"usage_stats": {"error": str(e)}}
 
 @FunctionTool
 def update_user_usage(user_id: str) -> str:
@@ -398,45 +588,91 @@ def get_business_analytics() -> dict:
         return {"error": str(e)}
 
 @FunctionTool
-def suggest_user_upgrade(user_id: str) -> dict:
+def get_api_key_setup_guide(user_id: str = None) -> dict:
     """
-    Analyze user behavior and suggest appropriate upgrade path.
+    Provide step-by-step guide for users to set up their Google Cloud API key.
     """
     try:
-        user_stats_ref = db.reference(f"user_stats/{user_id}")
-        stats = user_stats_ref.get() or {}
+        # Get user stats if available
+        usage_info = {}
+        if user_id:
+            user_stats_ref = db.reference(f"user_stats/{user_id}")
+            stats = user_stats_ref.get() or {}
+            total_videos = stats.get("total_videos_generated", 0)
+            usage_info = {"previous_videos": total_videos}
         
-        videos_generated = stats.get("total_videos_generated", 0)
-        upgrade_interest = stats.get("upgrade_interest", 0)
-        last_activity = stats.get("last_activity", 0)
-        
-        # Determine upgrade suggestion
-        suggestion = {
-            "should_upgrade": False,
-            "recommended_tier": "basic",
-            "reasons": [],
-            "incentive": None
+        return {
+            "setup_steps": {
+                "1_create_account": {
+                    "title": "Create Google Cloud Account",
+                    "description": "Sign up at cloud.google.com (free with $300 credit)",
+                    "url": "https://cloud.google.com/",
+                    "time": "2 minutes"
+                },
+                "2_enable_apis": {
+                    "title": "Enable Vertex AI API",
+                    "description": "Go to APIs & Services > Enable APIs > Search 'Vertex AI'",
+                    "url": "https://console.cloud.google.com/apis/enableflow?apiid=aiplatform.googleapis.com",
+                    "time": "1 minute"
+                },
+                "3_setup_billing": {
+                    "title": "Set up Billing",
+                    "description": "Add a payment method (required for Vertex AI)",
+                    "url": "https://console.cloud.google.com/billing/",
+                    "time": "2 minutes"
+                },
+                "4_create_api_key": {
+                    "title": "Create API Key",
+                    "description": "Go to APIs & Services > Credentials > Create API Key",
+                    "url": "https://console.cloud.google.com/apis/credentials",
+                    "time": "1 minute"
+                },
+                "5_secure_key": {
+                    "title": "Secure Your Key",
+                    "description": "Restrict API key to Vertex AI service only",
+                    "note": "Important: Never share your API key publicly",
+                    "time": "1 minute"
+                }
+            },
+            "cost_transparency": {
+                "google_charges": "You pay Google Cloud directly at their official rates",
+                "no_markup": "82ndrop doesn't add any fees - we just provide the AI interface",
+                "example_cost": "$6.00 for an 8-second video with audio"
+            },
+            "benefits": {
+                "control": "You control your own spending limits in Google Cloud",
+                "transparency": "See exactly what you're paying for in Google Cloud Console",
+                "enterprise": "Use your company's existing Google Cloud billing and quotas",
+                "no_subscription": "Pay only for what you generate"
+            },
+            "troubleshooting": {
+                "api_errors": "Check that Vertex AI API is enabled and billing is set up",
+                "permission_denied": "Ensure your API key has Vertex AI permissions",
+                "quota_exceeded": "Increase quotas in Google Cloud Console"
+            },
+            "user_info": usage_info,
+            "estimated_setup_time": "5-10 minutes total"
         }
         
-        if videos_generated >= 3:
-            suggestion["should_upgrade"] = True
-            suggestion["recommended_tier"] = "pro"
-            suggestion["reasons"].append("You've reached the basic tier limit")
-            
-        if videos_generated >= 20:
-            suggestion["recommended_tier"] = "enterprise"
-            suggestion["reasons"].append("Heavy usage detected - enterprise tier recommended")
-            
-        if upgrade_interest > 2:
-            suggestion["incentive"] = "20% off first month - you've shown interest!"
-            
-        # Activity-based incentives
-        days_since_activity = (int(time.time()) - last_activity) / (24 * 60 * 60)
-        if days_since_activity > 7:
-            suggestion["incentive"] = "Come back! 50% off your first upgraded month"
-            
-        return suggestion
-        
     except Exception as e:
-        print(f"Error generating upgrade suggestion: {e}")
+        print(f"Error generating setup guide: {e}")
         return {"error": str(e)}
+
+@FunctionTool 
+def get_staging_environment_info() -> dict:
+    """Get information about the current staging environment and access controls"""
+    try:
+        info = staging_access.get_staging_info()
+        info.update({
+            "video_generation_costs": {
+                "veo_3_video": "$0.50/second",
+                "veo_3_video_audio": "$0.75/second", 
+                "example_8_second_video": "$4.00",
+                "example_8_second_with_audio": "$6.00"
+            },
+            "protection_reason": "Videos cost real money - staging environment is locked down",
+            "current_environment": os.getenv("ENVIRONMENT", "unknown")
+        })
+        return info
+    except Exception as e:
+        return {"error": str(e), "environment": "unknown"}

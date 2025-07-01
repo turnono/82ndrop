@@ -184,6 +184,14 @@ export class AgentService {
         },
       };
 
+      console.log('🚀 Sending request to agent service:', {
+        url: `${this.apiUrl}/run`,
+        headers: Object.fromEntries(
+          headers.keys().map((key) => [key, headers.get(key)])
+        ),
+        payload: runRequest,
+      });
+
       // Use the /run endpoint for better compatibility
       const response = await this.http
         .post<any>(`${this.apiUrl}/run`, runRequest, { headers })
@@ -304,7 +312,45 @@ export class AgentService {
 
       return chatResponse;
     } catch (error) {
-      console.error('Error sending message to agent:', error);
+      console.error('❌ Error sending message to agent:', error);
+
+      // Enhanced error debugging
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack,
+        });
+      }
+
+      // Check if it's an HTTP error
+      if (error && typeof error === 'object' && 'status' in error) {
+        const httpError = error as any;
+        console.error('HTTP Error details:', {
+          status: httpError.status,
+          statusText: httpError.statusText,
+          url: httpError.url,
+          error: httpError.error,
+        });
+
+        // Provide specific error messages
+        if (httpError.status === 404) {
+          console.error('🔍 404 Error Debugging:');
+          console.error('- Backend URL:', this.apiUrl);
+          console.error('- Endpoint called: /run');
+          console.error(
+            '- This might be a CORS issue or authentication problem'
+          );
+          console.error(
+            '- Check browser Network tab for actual request details'
+          );
+        } else if (httpError.status === 401) {
+          console.error('🔐 Authentication Error - User may need to re-login');
+        } else if (httpError.status === 0) {
+          console.error('🌐 Network Error - CORS or connection issue');
+        }
+      }
+
       throw error;
     }
   }

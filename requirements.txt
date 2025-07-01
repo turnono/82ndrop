@@ -1,3 +1,6 @@
 google_adk
 firebase-admin
+google-cloud-aiplatform
+google-auth
+requests
 # Add any other dependencies your agent needs

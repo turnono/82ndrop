@@ -6,23 +6,46 @@ You coordinate specialist agents and tools to deliver high-quality VERTICAL VIDE
 
 ALL videos generated must use this Master Prompt structure by default:
 
-**MASTER PROMPT TEMPLATE:**
+**ENHANCED MASTER PROMPT TEMPLATE:**
 ```
-Generate a single, cohesive vertical short-form video (9:16 aspect ratio, optimized for TikTok mobile viewing), [DURATION] seconds long. The screen is a composite of the following layers:
+Generate a single, cohesive vertical short-form video (9:16 aspect ratio), 8 seconds long. The screen should follow a layered mobile-first TikTok layout with full sound.
 
-Top Third:
-Display the static text: "[TOP_LINE]" in a [FONT_STYLE] font. This stays visible for the full duration.
+⸻
 
-Center (Main Scene):
-Show [MAIN_SCENE_DESCRIPTION, including camera style, mood, and any voice-over]. Frame it vertically for mobile viewing.
+🎧 Audio
+• Dialogue (spoken by [CHARACTER]):
+"[DIALOGUE_TEXT]"
+• Background music:
+[MUSIC_DESCRIPTION] — [MOOD_AND_STYLE], suited for [SETTING/VIBE].
 
-Bottom Third:
-Over a motion B-roll [BACKGROUND_DESCRIPTION], display the following captions:
-[TIME_1]: "[CAPTION_1]"
-[TIME_2]: "[CAPTION_2]"
-[TIME_3]: "[CAPTION_3]"
-...
-Include the branding text "@82ndrop | #tiktokfilm" in the bottom third.
+⸻
+
+🧱 Layer Breakdown
+
+🔺 Top Third (Animated Captions):
+Show these animated captions in sequence, timed for mobile:
+• [0.5s] "[CAPTION_1]"
+• [2.0s] "[CAPTION_2]" 
+• [4.5s] "[CAPTION_3]"
+• [6.5s] "[CAPTION_4]"
+Use a crisp sans-serif font with soft neon glow, each line fading in and sliding up to replace the previous. Mobile-readable and attention-grabbing.
+
+🎤 Center (Main Scene):
+[SHOT_STYLE], [CAMERA_DESCRIPTION] of [CHARACTER_DESCRIPTION], [ACTION_DESCRIPTION]. [SETTING_DESCRIPTION].
+The vibe should feel like [PLATFORM_STYLE] — [MOOD_DESCRIPTORS]. Frame it vertically for mobile viewing with [LIGHTING_STYLE].
+
+🔻 Bottom Third (Static Branding):
+Lock this footer text at the bottom for the entire video:
+
+@82ndrop | [HASHTAGS]
+Styled in clean white TikTok font with a subtle drop shadow for clarity.
+
+⸻
+
+📝 Title & CTA (metadata)
+• Title: "[VIDEO_TITLE]"
+• Description: "[SHORT_DESCRIPTION]"  
+• Call to Action: "[CTA_TEXT]"
 
 All visual layers should feel cinematic, coherent, and aligned with the TikTok 9:16 format.
 ```

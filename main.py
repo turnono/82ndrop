@@ -54,7 +54,10 @@ SESSION_DB_URL = "sqlite:///./sessions.db"
 # CORS allowed origins - including frontend domains
 ALLOWED_ORIGINS = [
     "http://localhost:4200",  # Angular dev server
+    "http://127.0.0.1:4200",  # Angular dev server alternative
     "https://82ndrop.web.app",       # Production frontend
+    "https://82ndrop.firebaseapp.com",  # Firebase hosting alternative
+    "https://localhost:4200",  # HTTPS dev server
 ]
 # Set web=False to use our custom Firebase authentication instead of ADK's auth
 SERVE_WEB_INTERFACE = False
