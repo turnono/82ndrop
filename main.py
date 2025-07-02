@@ -59,8 +59,8 @@ ALLOWED_ORIGINS = [
     "https://82ndrop.firebaseapp.com",  # Firebase hosting alternative
     "https://localhost:4200",  # HTTPS dev server
 ]
-# Set web=False to use our custom Firebase authentication instead of ADK's auth
-SERVE_WEB_INTERFACE = False
+# Set web=True to enable proper function call handling
+SERVE_WEB_INTERFACE = True
 
 # Call the function to get the FastAPI app instance
 # Ensure the agent directory name ('drop_agent') matches your agent folder
