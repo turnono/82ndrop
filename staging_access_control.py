@@ -15,6 +15,8 @@ class StagingAccessControl:
         # Only these users can generate videos in staging
         self.authorized_users = [
             "turnono@gmail.com",  # Only authorized user for staging
+            "test_user",          # Allow test user for VEO3 integration testing
+            "system",             # Allow system user for testing
             # All other users will be blocked from video generation
         ]
         

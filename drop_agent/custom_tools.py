@@ -7,6 +7,7 @@ from google.adk.tools import FunctionTool
 import time
 import json
 import requests
+from typing import Optional
 from google.auth import default
 import google.auth.transport.requests
 
@@ -66,10 +67,10 @@ def check_user_access(user_id: str) -> dict:
         return {"can_generate_video": False, "error": str(e)}
 
 @FunctionTool
-def submit_veo_generation_job(prompt: str, user_api_key: str, user_id: str = "system", aspect_ratio: str = "9:16", 
+def submit_veo_generation_job(prompt: str, user_api_key: Optional[str] = None, user_id: str = "system", aspect_ratio: str = "9:16", 
                             duration_seconds: int = 8, sample_count: int = 1, 
-                            person_generation: str = "allow_adult", negative_prompt: str = None,
-                            generate_audio: bool = True, user_project_id: str = None) -> str:
+                            person_generation: str = "allow_adult", negative_prompt: Optional[str] = None,
+                            generate_audio: bool = True, user_project_id: Optional[str] = None) -> str:
     """
     Submits a video generation job to Google's Veo 3 model using user's own API credentials.
     Users pay Google directly - no subscription needed!
@@ -86,8 +87,7 @@ def submit_veo_generation_job(prompt: str, user_api_key: str, user_id: str = "sy
         generate_audio: Whether to generate synchronized audio (Veo 3 feature)
         user_project_id: User's Google Cloud Project ID (if different from API key)
     
-    Returns:
-        Success message with job ID or error message
+    Returns: Success message with job ID or error message
     """
     job_id = str(uuid.uuid4())
     
@@ -145,7 +145,7 @@ def submit_veo_generation_job(prompt: str, user_api_key: str, user_id: str = "sy
         job_ref.set(job_data)
         print(f"Job {job_id}: Created Firebase tracking document - User pays directly (${estimated_cost:.2f})")
 
-        # REAL VEO API CALL using user's credentials
+        # REAL VEO API CALL using user's credentials or service account
         try:
             # Construct the API endpoint using user's project
             api_endpoint = f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{VEO_MODEL_ID}:predictLongRunning"
@@ -168,15 +168,39 @@ def submit_veo_generation_job(prompt: str, user_api_key: str, user_id: str = "sy
             if negative_prompt:
                 request_payload["parameters"]["negativePrompt"] = negative_prompt
 
-            print(f"Job {job_id}: Submitting to Veo 3 with user's API key")
+            # Determine authentication method
+            if user_api_key:
+                print(f"Job {job_id}: Submitting to Veo 3 with user's API key")
+                headers = {
+                    "Authorization": f"Bearer {user_api_key}",
+                    "Content-Type": "application/json"
+                }
+            else:
+                # Use service account credentials (for staging/testing)
+                print(f"Job {job_id}: Submitting to Veo 3 with service account credentials (staging)")
+                try:
+                    credentials, _ = default()
+                    auth_req = google.auth.transport.requests.Request()
+                    credentials.refresh(auth_req)
+                    access_token = credentials.token
+                    headers = {
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    }
+                except Exception as auth_error:
+                    error_msg = f"Failed to get service account credentials: {str(auth_error)}"
+                    print(f"Job {job_id}: {error_msg}")
+                    job_ref.update({
+                        "status": "failed",
+                        "error": error_msg,
+                        "failedAt": int(time.time())
+                    })
+                    return f"❌ Error: Authentication failed\n\nJob ID: {job_id}\nError: {error_msg}\n\nPlease provide your Google Cloud API key or contact admin."
+
             print(f"Job {job_id}: Parameters: {json.dumps(request_payload['parameters'], indent=2)}")
-            print(f"Job {job_id}: User will be charged: ${estimated_cost:.2f} by Google Cloud")
+            print(f"Job {job_id}: Estimated cost: ${estimated_cost:.2f}")
             
-            # Use user's API key for authentication
-            headers = {
-                "Authorization": f"Bearer {user_api_key}",
-                "Content-Type": "application/json"
-            }
+            # Prepare headers for API call
             
             response = requests.post(
                 api_endpoint,
@@ -327,7 +351,7 @@ def get_veo_pricing_info() -> dict:
     }
 
 @FunctionTool 
-def get_video_job_status(job_id: str, user_api_key: str = None) -> dict:
+def get_video_job_status(job_id: str, user_api_key: Optional[str] = None) -> dict:
     """
     Retrieves the status of a video generation job and polls Vertex AI for updates.
     
@@ -676,3 +700,140 @@ def get_staging_environment_info() -> dict:
         return info
     except Exception as e:
         return {"error": str(e), "environment": "unknown"}
+
+@FunctionTool
+def generate_video_complete(prompt: str, user_api_key: Optional[str] = None, user_id: str = "system", aspect_ratio: str = "9:16", 
+                          duration_seconds: int = 8, sample_count: int = 1, 
+                          person_generation: str = "allow_adult", negative_prompt: Optional[str] = None,
+                          generate_audio: bool = True, user_project_id: Optional[str] = None) -> dict:
+    """
+    Generates a complete video using VEO3 and returns the actual MP4 video URLs.
+    This function waits for completion (2-3 minutes) and returns the final video files.
+    
+    Args:
+        prompt: The text prompt for video generation
+        user_api_key: User's Google Cloud API key or service account JSON
+        user_id: User ID for tracking (defaults to "system")
+        aspect_ratio: "16:9" (landscape) or "9:16" (portrait)
+        duration_seconds: Video duration in seconds (Veo 3 uses 8 seconds)
+        sample_count: Number of video variations to generate (1-4)
+        person_generation: "dont_allow", "allow_adult", or "allow_all"
+        negative_prompt: Optional negative prompt to discourage certain elements
+        generate_audio: Whether to generate synchronized audio (Veo 3 feature)
+        user_project_id: User's Google Cloud Project ID (if different from API key)
+    
+    Returns: Dictionary with video URLs and metadata, or error information
+    """
+    
+    # Step 1: Submit the video generation job
+    try:
+        result = submit_veo_generation_job(
+            prompt=prompt,
+            user_api_key=user_api_key,
+            user_id=user_id,
+            aspect_ratio=aspect_ratio,
+            duration_seconds=duration_seconds,
+            sample_count=sample_count,
+            person_generation=person_generation,
+            negative_prompt=negative_prompt,
+            generate_audio=generate_audio,
+            user_project_id=user_project_id
+        )
+        
+        # Extract job ID from the success message
+        if "Job ID:" in result:
+            job_id = result.split("Job ID: ")[1].split("\n")[0].strip()
+        else:
+            # If submission failed, return the error
+            return {
+                "status": "failed",
+                "error": result,
+                "videos": []
+            }
+            
+    except Exception as e:
+        return {
+            "status": "failed", 
+            "error": f"Failed to submit video generation job: {str(e)}",
+            "videos": []
+        }
+    
+    # Step 2: Wait for completion and poll for results
+    max_wait_time = 300  # 5 minutes maximum wait
+    poll_interval = 15   # Check every 15 seconds
+    elapsed_time = 0
+    
+    print(f"🎬 Waiting for VEO3 to generate video(s) for job {job_id}...")
+    print(f"⏱️ This typically takes 2-3 minutes. Will check every {poll_interval} seconds.")
+    
+    while elapsed_time < max_wait_time:
+        try:
+            status_result = get_video_job_status(job_id, user_api_key)
+            current_status = status_result.get("status", "unknown")
+            
+            if current_status == "completed":
+                video_urls = status_result.get("videoUrls", [])
+                
+                if video_urls:
+                    estimated_cost = status_result.get("estimatedCost", 0)
+                    audio_status = "with synchronized audio" if generate_audio else "video only"
+                    
+                    print(f"✅ Video generation completed! Generated {len(video_urls)} video(s)")
+                    
+                    return {
+                        "status": "completed",
+                        "videos": video_urls,
+                        "job_id": job_id,
+                        "prompt": prompt,
+                        "parameters": {
+                            "aspect_ratio": aspect_ratio,
+                            "duration_seconds": duration_seconds,
+                            "sample_count": sample_count,
+                            "generate_audio": generate_audio
+                        },
+                        "estimated_cost": estimated_cost,
+                        "generation_time_seconds": elapsed_time,
+                        "message": f"🎉 Success! Generated {len(video_urls)} VEO3 video{'s' if len(video_urls) > 1 else ''} ({audio_status})"
+                    }
+                else:
+                    return {
+                        "status": "failed",
+                        "error": "Video generation completed but no video URLs were returned",
+                        "videos": [],
+                        "job_id": job_id
+                    }
+                    
+            elif current_status == "failed":
+                error_msg = status_result.get("error", "Unknown error occurred")
+                return {
+                    "status": "failed",
+                    "error": f"Video generation failed: {error_msg}",
+                    "videos": [],
+                    "job_id": job_id
+                }
+                
+            elif current_status in ["pending", "processing"]:
+                # Still processing, continue waiting
+                print(f"⏳ Still generating... ({elapsed_time}s elapsed)")
+                time.sleep(poll_interval)
+                elapsed_time += poll_interval
+                
+            else:
+                # Unknown status, continue waiting but log it
+                print(f"🤔 Unknown status '{current_status}', continuing to wait...")
+                time.sleep(poll_interval)
+                elapsed_time += poll_interval
+                
+        except Exception as poll_error:
+            print(f"⚠️ Error checking status: {poll_error}")
+            time.sleep(poll_interval)
+            elapsed_time += poll_interval
+    
+    # Timeout reached
+    return {
+        "status": "timeout",
+        "error": f"Video generation timed out after {max_wait_time} seconds. The job may still be processing.",
+        "videos": [],
+        "job_id": job_id,
+        "message": f"⏰ Timeout: Video generation took longer than expected. Check job {job_id} status later using get_video_job_status()"
+    }
