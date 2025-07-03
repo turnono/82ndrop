@@ -67,7 +67,7 @@ def check_user_access(user_id: str) -> dict:
         return {"can_generate_video": False, "error": str(e)}
 
 @FunctionTool
-def submit_veo_generation_job(prompt: str, user_api_key: Optional[str] = None, user_id: str = "system", aspect_ratio: str = "9:16", 
+def submit_veo_generation_job(prompt: str, user_api_key: Optional[str] = None, user_id: str = "system", aspect_ratio: str = "16:9", 
                             duration_seconds: int = 8, sample_count: int = 1, 
                             person_generation: str = "allow_adult", negative_prompt: Optional[str] = None,
                             generate_audio: bool = True, user_project_id: Optional[str] = None) -> str:
@@ -702,7 +702,7 @@ def get_staging_environment_info() -> dict:
         return {"error": str(e), "environment": "unknown"}
 
 @FunctionTool
-def generate_video_complete(prompt: str, user_api_key: Optional[str] = None, user_id: str = "system", aspect_ratio: str = "9:16", 
+def generate_video_complete(prompt: str, user_api_key: Optional[str] = None, user_id: str = "system", aspect_ratio: str = "16:9", 
                           duration_seconds: int = 8, sample_count: int = 1, 
                           person_generation: str = "allow_adult", negative_prompt: Optional[str] = None,
                           generate_audio: bool = True, user_project_id: Optional[str] = None) -> dict:
@@ -714,7 +714,7 @@ def generate_video_complete(prompt: str, user_api_key: Optional[str] = None, use
         prompt: The text prompt for video generation
         user_api_key: User's Google Cloud API key or service account JSON
         user_id: User ID for tracking (defaults to "system")
-        aspect_ratio: "16:9" (landscape) or "9:16" (portrait)
+        aspect_ratio: "16:9" (landscape - VEO3 supported) or "9:16" (portrait - not supported by VEO3)
         duration_seconds: Video duration in seconds (Veo 3 uses 8 seconds)
         sample_count: Number of video variations to generate (1-4)
         person_generation: "dont_allow", "allow_adult", or "allow_all"
