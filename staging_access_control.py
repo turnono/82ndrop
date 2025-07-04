@@ -53,14 +53,7 @@ class StagingAccessControl:
         if not self.is_authorized_for_video_generation(user_id, user_email):
             raise HTTPException(
                 status_code=403,
-                detail={
-                    "error": "Staging Environment Access Restricted",
-                    "message": f"This staging environment is restricted to authorized users only. {operation} is not available.",
-                    "environment": "staging",
-                    "user_id": user_id,
-                    "authorized": False,
-                    "contact": "Contact admin for staging access"
-                }
+                detail="Permission denied"
             )
     
     def get_staging_info(self) -> dict:

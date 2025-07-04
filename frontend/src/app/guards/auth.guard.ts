@@ -46,8 +46,7 @@ export class AuthGuard implements CanActivate {
 
       // Check if access was granted
       if (this.authService.hasAgentAccess()) {
-        // Don't navigate here, let the auth state change handle it
-        window.location.reload(); // Force a reload to re-trigger auth check
+        this.router.navigate(['/dashboard']);
       } else {
         // If auto-grant failed, show the access-pending screen
         this.router.navigate(['/access-pending']);

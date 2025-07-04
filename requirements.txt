@@ -3,4 +3,7 @@ firebase-admin
 google-cloud-aiplatform
 google-auth
 requests
+fastapi
+uvicorn[standard]
+google-cloud-storage==2.14.0
 # Add any other dependencies your agent needs

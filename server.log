@@ -1,0 +1,36 @@
+🔒 Staging Access Control: ACTIVE
+   Authorized users: 3
+✅ Staging access control loaded
+Firebase Admin SDK initialized successfully for custom tools.
+INFO:     Started server process [35468]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+✅ Created Firebase tracking document for job 200403ad-bcf9-4547-acef-ffe914d543a6
+✅ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Submitting to Vertex AI with token: ya29.c.c0A...
+✅ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Using output URI: gs://taajirah-adk-staging/veo3/200403ad-bcf9-4547-acef-ffe914d543a6/
+⏳ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Quota exceeded. Retrying in 60 seconds (attempt 1/5)
+✅ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Submitting to Vertex AI with token: ya29.c.c0A...
+✅ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Using output URI: gs://taajirah-adk-staging/veo3/200403ad-bcf9-4547-acef-ffe914d543a6/
+⏳ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Quota exceeded. Retrying in 120 seconds (attempt 2/5)
+✅ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Submitting to Vertex AI with token: ya29.c.c0A...
+✅ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Using output URI: gs://taajirah-adk-staging/veo3/200403ad-bcf9-4547-acef-ffe914d543a6/
+⏳ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Quota exceeded. Retrying in 240 seconds (attempt 3/5)
+✅ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Submitting to Vertex AI with token: ya29.c.c0A...
+✅ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Using output URI: gs://taajirah-adk-staging/veo3/200403ad-bcf9-4547-acef-ffe914d543a6/
+⏳ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Quota exceeded. Retrying in 480 seconds (attempt 4/5)
+✅ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Submitting to Vertex AI with token: ya29.c.c0A...
+✅ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Using output URI: gs://taajirah-adk-staging/veo3/200403ad-bcf9-4547-acef-ffe914d543a6/
+⏳ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Quota exceeded. Retrying in 600 seconds (attempt 5/5)
+✅ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Submitting to Vertex AI with token: ya29.c.c0A...
+✅ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Using output URI: gs://taajirah-adk-staging/veo3/200403ad-bcf9-4547-acef-ffe914d543a6/
+❌ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Vertex AI API quota exceeded after 5 retries: {
+  "error": {
+    "code": 429,
+    "message": "Quota exceeded for aiplatform.googleapis.com/online_prediction_requests_per_base_model with base model: veo-3.0-generate-001. Please submit a quota increase request. https://cloud.google.com/vertex-ai/docs/generative-ai/quotas-genai.",
+    "status": "RESOURCE_EXHAUSTED"
+  }
+}
+
+❌ Job 200403ad-bcf9-4547-acef-ffe914d543a6: Response headers: {'Vary': 'Origin, X-Origin, Referer', 'Content-Type': 'application/json; charset=UTF-8', 'Content-Encoding': 'gzip', 'Date': 'Fri, 04 Jul 2025 15:33:18 GMT', 'Server': 'scaffolding on HTTPServer2', 'X-XSS-Protection': '0', 'X-Frame-Options': 'SAMEORIGIN', 'X-Content-Type-Options': 'nosniff', 'Alt-Svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000', 'Transfer-Encoding': 'chunked'}
+INFO:     127.0.0.1:49158 - "POST /generate-video HTTP/1.1" 200 OK

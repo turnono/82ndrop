@@ -2,6 +2,7 @@ from google.adk import Agent
 from google.adk.tools.agent_tool import AgentTool
 from .prompts import PROMPT
 from .sub_agents import guide_agent, search_agent, prompt_writer_agent, video_generator_agent
+from .custom_tools import get_video_job_status  # Only import status check tool
 from .callbacks import (
     before_agent_callback,
     after_agent_callback,
@@ -11,7 +12,7 @@ from .callbacks import (
     after_tool_callback,
 )
 
-# Create the authenticated root agent - Hub-and-Spoke Pattern (following proven pattern)
+# Create the authenticated root agent - Hub-and-Spoke Pattern with enhanced workflow
 root_agent = Agent(
     name="task_master_agent",
     model="gemini-2.0-flash",
@@ -27,9 +28,16 @@ root_agent = Agent(
     before_tool_callback=before_tool_callback,
     after_tool_callback=after_tool_callback,
     
-    # Use sub_agents for agents that can be transferred to
-    sub_agents=[guide_agent, prompt_writer_agent, video_generator_agent],
+    # All agents in the pipeline as sub-agents to enforce workflow
+    sub_agents=[
+        guide_agent,      # Step 1: Vertical composition analysis
+        search_agent,     # Step 2: Trend research
+        prompt_writer_agent,  # Step 3: Enhanced prompt creation
+        video_generator_agent # Step 4: Video generation
+    ],
     
-    # Use tools for utility agents (following proven pattern)
-    tools=[AgentTool(agent=search_agent)],
+    # Only status check tool - video generation must go through video_generator_agent
+    tools=[
+        get_video_job_status  # For checking generation progress only
+    ],
 ) 
