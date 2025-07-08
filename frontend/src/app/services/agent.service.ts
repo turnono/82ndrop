@@ -422,7 +422,6 @@ export class AgentService {
       search_agent: 'Search Agent',
       prompt_writer_agent: 'Prompt Writer Agent',
       drop_agent: '82ndrop Root Agent',
-      task_master_agent: 'Task Master Agent',
     };
 
     return (

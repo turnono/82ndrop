@@ -1,9 +1,10 @@
 {
   "rules": {
     "sessions": {
-      "$userId": {
-        ".read": "auth != null && auth.uid == $userId",
-        ".write": "auth != null && auth.uid == $userId",
+      "$user_id": {
+        ".indexOn": ["updatedAt"],
+        ".read": "auth != null && auth.uid == $user_id",
+        ".write": "auth != null && auth.uid == $user_id",
         "$sessionId": {
           ".validate": "newData.hasChildren(['title', 'userId', 'createdAt', 'updatedAt', 'messageCount'])"
         }

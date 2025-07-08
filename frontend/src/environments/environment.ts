@@ -1,6 +1,7 @@
 export const environment = {
-  production: true,
-  apiUrl: 'https://drop-agent-service-855515190257.us-central1.run.app', // ADK service with analytics
+  production: false,
+  staging: true,
+  apiUrl: 'http://localhost:8000',
   paystack: {
     publicKey: 'pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // Replace with your Paystack public key
     secretKey: 'sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // Replace with your Paystack secret key
@@ -16,4 +17,6 @@ export const environment = {
     appId: '1:855515190257:web:2c01b97a96acc83556ea50',
     measurementId: 'G-SP3FWBJNT3',
   },
+  debugMode: true,
+  logLevel: 'DEBUG',
 };

@@ -44,6 +44,7 @@ gcloud run deploy ${STAGING_SERVICE} \
   --set-env-vars GOOGLE_CLOUD_PROJECT=${PROJECT_ID} \
   --set-env-vars FIREBASE_DATABASE_URL=https://taajirah-default-rtdb.europe-west1.firebasedatabase.app/ \
   --set-env-vars LOG_LEVEL=DEBUG \
+  --set-env-vars ALLOWED_ORIGINS="http://localhost:4200,http://127.0.0.1:4200,https://82ndrop-staging.web.app,https://82ndrop-staging.firebaseapp.com" \
   --project ${PROJECT_ID}
 
 # Get the staging URL
@@ -74,6 +75,15 @@ if [[ $HEALTH_RESPONSE == *"healthy"* ]]; then
     echo "✅ Health check passed"
 else
     echo "❌ Health check failed: $HEALTH_RESPONSE"
+fi
+
+# Test CORS configuration
+echo "Testing CORS configuration..."
+CORS_RESPONSE=$(curl -s -I -H "Origin: http://localhost:4200" "${STAGING_URL}/health" || echo "FAILED")
+if [[ $CORS_RESPONSE == *"Access-Control-Allow-Origin"* ]]; then
+    echo "✅ CORS check passed"
+else
+    echo "❌ CORS check failed: $CORS_RESPONSE"
 fi
 
 echo ""

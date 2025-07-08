@@ -45,7 +45,7 @@ async def test_agent_configuration():
         from drop_agent.sub_agents.prompt_writer.agent import prompt_writer_agent
         
         # Verify root agent configuration
-        if root_agent.name != "task_master_agent":
+        if root_agent.name != "drop_agent":
             raise Exception(f"Root agent name incorrect: {root_agent.name}")
             
         if root_agent.model != "gemini-2.0-flash":

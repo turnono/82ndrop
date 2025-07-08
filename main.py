@@ -1,209 +1,122 @@
 import os
 import logging
-from logging_config import APILogger
-import firebase_admin
-from firebase_admin import credentials, auth
-from fastapi import Request, HTTPException
-from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uvicorn
-from google.adk.cli.fast_api import get_fast_api_app
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 
-# Initialize Firebase Admin SDK
-def initialize_firebase():
-    if not firebase_admin._apps:
-        # Try to initialize with service account key if available
-        try:
-            cred_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
-            if cred_path and os.path.exists(cred_path):
-                cred = credentials.Certificate(cred_path)
-                firebase_admin.initialize_app(cred)
-                print("Firebase initialized with service account key")
-            else:
-                # Use default credentials (for Cloud Run)
-                cred = credentials.ApplicationDefault()
-                firebase_admin.initialize_app(cred)
-                print("Firebase initialized with application default credentials")
-        except Exception as e:
-            print(f"Warning: Failed to initialize Firebase Admin SDK: {e}")
-            print("Authentication will be disabled")
-            return False
-    return True
+# Import the runner and session management
+from drop_agent.services import get_runner, APP_NAME
 
-# Verify Firebase ID token
-def verify_firebase_token(token: str):
-    try:
-        decoded_token = auth.verify_id_token(token)
-        return decoded_token
-    except Exception as e:
-        logger.warning(f"Token verification failed: {e}")
-        raise HTTPException(status_code=401, detail="Invalid authentication token")
-
-# Initialize Firebase and Logger
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-api_logger = APILogger()
-firebase_initialized = initialize_firebase()
 
-# Local development token for testing (bypass Firebase auth)
-LOCAL_DEV_TOKEN = os.environ.get('LOCAL_DEV_TOKEN')
+# Create FastAPI app
+app = FastAPI()
 
-# Get the directory where main.py is located
-AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Example session DB URL (e.g., SQLite)
-SESSION_DB_URL = "sqlite:///./sessions.db"
-# CORS allowed origins - including frontend domains
-ALLOWED_ORIGINS = [
-    "http://localhost:4200",  # Angular dev server
-    "http://127.0.0.1:4200",  # Angular dev server alternative
-    "https://82ndrop.web.app",       # Production frontend
-    "https://82ndrop.firebaseapp.com",  # Firebase hosting alternative
-    "https://localhost:4200",  # HTTPS dev server
-]
-# Set web=False to use our custom Firebase authentication instead of ADK's auth
-SERVE_WEB_INTERFACE = False
-
-# Call the function to get the FastAPI app instance
-# Ensure the agent directory name ('drop_agent') matches your agent folder
-app = get_fast_api_app(
-    agents_dir=AGENT_DIR,
-    session_service_uri=SESSION_DB_URL,
-    allow_origins=ALLOWED_ORIGINS,
-    web=SERVE_WEB_INTERFACE,
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Add Firebase authentication middleware
-@app.middleware("http")
-async def firebase_auth_middleware(request: Request, call_next):
-    # Allow CORS preflight requests to pass through
-    if request.method == "OPTIONS":
-        return await call_next(request)
+@app.get("/")
+async def root():
+    """Health check endpoint."""
+    return {"status": "ok", "message": "82ndrop agent is running"}
 
-    # Skip authentication for health checks and static files
-    if request.url.path in ["/", "/health", "/docs", "/openapi.json"] or request.url.path.startswith("/static"):
-        return await call_next(request)
-    
-    # Check for Authorization header
-    auth_header = request.headers.get("Authorization")
-    if not auth_header:
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Authorization header required"}
-        )
-    
-    # Extract token from Bearer header
-    if not auth_header.startswith("Bearer "):
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Invalid authorization header format"}
-        )
-    
-    token = auth_header.split(" ")[1]
-    
-    # Local development bypass - allow using the actual Firebase token directly
-    if LOCAL_DEV_TOKEN and LOCAL_DEV_TOKEN == "firebase":
-        logger.info("Using local development mode with Firebase token")
-        # Use Firebase token verification even in local mode
-        try:
-            decoded_token = verify_firebase_token(token)
-            request.state.user = decoded_token
-            request.state.user_id = decoded_token.get('uid')
-            request.state.user_email = decoded_token.get('email')
-            return await call_next(request)
-        except Exception as e:
-            logger.error(f"Firebase token verification failed in local mode: {e}")
-            return JSONResponse(
-                status_code=401,
-                content={"detail": f"Firebase authentication failed: {e}"}
-            )
-    
-    # Skip authentication if Firebase is not initialized (for local dev)
-    if not firebase_initialized:
-        logger.warning("Firebase not initialized, skipping authentication")
-        return await call_next(request)
-    
-    # Verify Firebase token
+@app.post("/run")
+async def run_agent(request: Request):
+    """Run the agent with the given message."""
     try:
-        decoded_token = verify_firebase_token(token)
-        # Add user info to request state for use in endpoints
-        request.state.user = decoded_token
-        request.state.user_id = decoded_token.get('uid')
-        request.state.user_email = decoded_token.get('email')
-        api_logger.log_authentication(
-            user_id=decoded_token.get('uid'),
-            email=decoded_token.get('email'),
-            success=True
-        )
-    except HTTPException as e:
-        api_logger.log_authentication(
-            user_id=None,
-            email=None,
-            success=False,
-            reason=e.detail
-        )
-        return JSONResponse(
-            status_code=e.status_code,
-            content={"detail": e.detail}
+        # Basic auth check
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or auth_header != "Bearer firebase":
+            logger.warning("Missing or invalid Authorization header")
+            raise HTTPException(status_code=401, detail="Authorization header required")
+            
+        # Get request body
+        body = await request.json()
+        logger.info(f"Received request for user {body.get('userId')} with session {body.get('sessionId')}")
+        
+        # Get message from request
+        message = body.get("newMessage", {})
+        if not message or not message.get("parts", []):
+            logger.error(f"Invalid message format received: {message}")
+            raise HTTPException(status_code=400, detail="Invalid message format")
+            
+        logger.debug(f"Processing message: {message}")
+        
+        # Get user ID and session ID
+        user_id = body.get("userId", "test_user")
+        session_id = body.get("sessionId")
+        
+        # Get the ADK runner
+        runner = get_runner()
+        
+        # Create session if needed
+        if not session_id:
+            logger.info(f"Creating new session for user {user_id}")
+            session = await runner.session_service.create_session(
+                app_name=APP_NAME,
+                user_id=user_id
+            )
+            session_id = session.id
+            logger.info(f"Created new session {session_id}")
+        
+        # Set current session
+        session = await runner.session_service.get_session(session_id)
+        if not session:
+            logger.error(f"Session {session_id} not found")
+            raise HTTPException(status_code=404, detail="Session not found")
+            
+        logger.debug(f"Current session state before update: {session.state}")
+        
+        # Update session state with new message
+        if not session.state:
+            session.state = {"messages": []}
+        session.state["messages"].append(message)
+        await runner.session_service.set_current_session(session)
+        
+        logger.debug(f"Updated session state: {session.state}")
+        
+        # Run the agent and stream responses
+        async def event_generator():
+            try:
+                logger.info(f"Starting agent run for session {session_id}")
+                async for event in runner.run_async(
+                    user_id=user_id,
+                    session_id=session_id,
+                    new_message=message
+                ):
+                    if isinstance(event, dict):
+                        yield f"data: {event}\n\n"
+                    else:
+                        yield f"data: {event.__dict__}\n\n"
+            except Exception as e:
+                logger.error(f"Error in event_generator: {str(e)}", exc_info=True)
+                yield f"data: {{'error': '{str(e)}'}}\n\n"
+            finally:
+                logger.info(f"Completed agent run for session {session_id}")
+                yield "data: [DONE]\n\n"
+                
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
         )
     except Exception as e:
-        logger.error(f"Unexpected error during token verification: {e}")
-        api_logger.log_authentication(
-            user_id=None,
-            email=None,
-            success=False,
-            reason=str(e)
-        )
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Authentication failed"}
-        )
-    
-    return await call_next(request)
-
-# Health check endpoint (no auth required)
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "firebase_initialized": firebase_initialized,
-        "service": "82ndrop-agent"
-    }
-
-# User profile endpoint
-@app.get("/user/profile")
-async def get_user_profile(request: Request):
-    # Get user info from middleware
-    user_token = getattr(request.state, 'user', None)
-    if not user_token:
-        # This case should ideally not be reached if middleware is effective
-        raise HTTPException(status_code=401, detail="User not authenticated")
-    
-    # Extract user information and custom claims
-    uid = user_token.get('uid')
-    email = user_token.get('email')
-    name = user_token.get('name', user_token.get('display_name'))
-    
-    # Get custom claims
-    agent_access = user_token.get('agent_access', False)
-    access_level = user_token.get('access_level', 'none')
-    agent_permissions = user_token.get('agent_permissions', {})
-    
-    return {
-        "uid": uid,
-        "email": email,
-        "display_name": name,
-        "agent_access": agent_access,
-        "access_level": access_level,
-        "permissions": agent_permissions
-    }
-
-# You can add more FastAPI routes or configurations below if needed
-# Example:
-# @app.get("/hello")
-# async def read_root():
-#     return {"Hello": "World"}
+        logger.error(f"Error in run_agent: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    # Use port 8000 to avoid conflict with Jenkins on 8080
-    logging.basicConfig(level=logging.INFO)
-    logger.info("Starting 82ndrop agent server...")
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000))) 
+    port = int(os.getenv("PORT", 8888))
+    uvicorn.run(app, host="0.0.0.0", port=port) 

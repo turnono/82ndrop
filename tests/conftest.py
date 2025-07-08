@@ -131,7 +131,7 @@ async def mock_agent_system():
     """Mock complete agent system"""
     # Mock root agent
     root_agent = Mock(spec=Agent)
-    root_agent.name = "task_master_agent"
+    root_agent.name = "drop_agent"
     root_agent.model = "gemini-2.0-flash"
     root_agent.run = AsyncMock(return_value="Generated video prompt")
     
