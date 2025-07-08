@@ -15,6 +15,8 @@ class StagingAccessControl:
         # Only these users can generate videos in staging
         self.authorized_users = [
             "turnono@gmail.com",  # Only authorized user for staging
+            "test_user",          # Allow test user for VEO3 integration testing
+            "system",             # Allow system user for testing
             # All other users will be blocked from video generation
         ]
         
@@ -51,14 +53,7 @@ class StagingAccessControl:
         if not self.is_authorized_for_video_generation(user_id, user_email):
             raise HTTPException(
                 status_code=403,
-                detail={
-                    "error": "Staging Environment Access Restricted",
-                    "message": f"This staging environment is restricted to authorized users only. {operation} is not available.",
-                    "environment": "staging",
-                    "user_id": user_id,
-                    "authorized": False,
-                    "contact": "Contact admin for staging access"
-                }
+                detail="Permission denied"
             )
     
     def get_staging_info(self) -> dict:

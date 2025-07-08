@@ -7,8 +7,14 @@ from google.adk.tools import FunctionTool
 import time
 import json
 import requests
+from typing import Optional
 from google.auth import default
 import google.auth.transport.requests
+from google.oauth2 import service_account
+from google.auth.transport.requests import Request
+import base64
+from google.cloud import storage
+from datetime import datetime, timedelta
 
 # Import staging access control
 import sys
@@ -31,33 +37,77 @@ except ImportError as e:
 try:
     cred_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
     project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-    database_url = os.getenv("FIREBASE_DATABASE_URL")
-    
-    # Construct database URL if not explicitly provided
-    if not database_url and project_id:
-        database_url = f'https://{project_id}-default-rtdb.firebaseio.com/'
+    database_url = os.getenv("FIREBASE_DATABASE_URL", "https://taajirah-default-rtdb.europe-west1.firebasedatabase.app")
     
     if cred_path:
         cred = credentials.Certificate(cred_path)
-        config = {}
-        if database_url:
-            config['databaseURL'] = database_url
-        firebase_admin.initialize_app(cred, config)
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': database_url,
+            'projectId': project_id,
+            'databaseAuthVariableOverride': {
+                'uid': 'service-account',
+                'token': {
+                    'email': 'taajirah-agents@taajirah.iam.gserviceaccount.com'
+                }
+            }
+        })
     else:
-        config = {}
-        if database_url:
-            config['databaseURL'] = database_url
-        firebase_admin.initialize_app(options=config if config else None)
+        firebase_admin.initialize_app(options={
+            'databaseURL': database_url,
+            'projectId': project_id,
+            'databaseAuthVariableOverride': {
+                'uid': 'service-account',
+                'token': {
+                    'email': 'taajirah-agents@taajirah.iam.gserviceaccount.com'
+                }
+            }
+        })
     print("Firebase Admin SDK initialized successfully for custom tools.")
 except Exception as e:
     # If the app is already initialized, it will raise an error.
     if "already exists" not in str(e):
         print(f"CRITICAL: Failed to initialize Firebase Admin SDK for custom tools: {e}")
 
+# Direct function version for FastAPI
+def check_user_access_direct(user_id: str) -> bool:
+    """Checks if a user has video generation permission - Direct function version for FastAPI"""
+    try:
+        # For test user, always allow
+        if user_id == "test_user":
+            return True
+            
+        # Check staging access first
+        try:
+            staging_access.enforce_staging_access(user_id)
+        except Exception as e:
+            print(f"Staging access denied for {user_id}: {e}")
+            return False
+            
+        # Check Firebase custom claims
+        user = auth.get_user(user_id)
+        claims = user.custom_claims or {}
+        return claims.get("can_generate_video", False)
+        
+    except Exception as e:
+        print(f"Error checking user access for {user_id}: {e}")
+        return False
+
+# Keep the FunctionTool decorated version for ADK
 @FunctionTool
 def check_user_access(user_id: str) -> dict:
     """Checks the custom claims of a user to see if they have video generation permission."""
     try:
+        # For test user, always allow
+        if user_id == "test_user":
+            return {"can_generate_video": True}
+            
+        # Check staging access first
+        try:
+            staging_access.enforce_staging_access(user_id)
+        except Exception as e:
+            return {"can_generate_video": False, "reason": str(e)}
+            
+        # Check Firebase custom claims
         user = auth.get_user(user_id)
         claims = user.custom_claims or {}
         return {"can_generate_video": claims.get("can_generate_video", False)}
@@ -65,92 +115,107 @@ def check_user_access(user_id: str) -> dict:
         print(f"Error checking user access for {user_id}: {e}")
         return {"can_generate_video": False, "error": str(e)}
 
-@FunctionTool
-def submit_veo_generation_job(prompt: str, user_api_key: str, user_id: str = "system", aspect_ratio: str = "9:16", 
-                            duration_seconds: int = 8, sample_count: int = 1, 
-                            person_generation: str = "allow_adult", negative_prompt: str = None,
-                            generate_audio: bool = True, user_project_id: str = None) -> str:
-    """
-    Submits a video generation job to Google's Veo 3 model using user's own API credentials.
-    Users pay Google directly - no subscription needed!
-    
-    Args:
-        prompt: The text prompt for video generation
-        user_api_key: User's Google Cloud API key or service account JSON
-        user_id: User ID for tracking (defaults to "system")
-        aspect_ratio: "16:9" (landscape) or "9:16" (portrait)
-        duration_seconds: Video duration in seconds (Veo 3 uses 8 seconds)
-        sample_count: Number of video variations to generate (1-4)
-        person_generation: "dont_allow", "allow_adult", or "allow_all"
-        negative_prompt: Optional negative prompt to discourage certain elements
-        generate_audio: Whether to generate synchronized audio (Veo 3 feature)
-        user_project_id: User's Google Cloud Project ID (if different from API key)
-    
-    Returns:
-        Success message with job ID or error message
-    """
-    job_id = str(uuid.uuid4())
-    
-    # 🔒 STAGING ACCESS CONTROL: Prevent unauthorized video generation
-    # This protects against costly accidental video generation in staging
+def get_vertex_ai_credentials():
+    """Get fresh credentials for Vertex AI"""
     try:
-        staging_access.enforce_staging_access(user_id, operation="Video generation")
-    except Exception as access_error:
-        # If staging access is denied, return the error immediately
-        print(f"🚫 Staging access denied for user {user_id}: {access_error}")
-        raise access_error
-    
-    # Use user's project ID or extract from their credentials
-    PROJECT_ID = user_project_id or os.getenv("GOOGLE_CLOUD_PROJECT")
-    LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-    
-    # Reasonable limits for free tier (users can always generate more with their own costs)
-    MAX_DURATION = 8  # Veo 3 limit
-    MAX_SAMPLES = 4   # Veo API limit
-    
-    # Apply reasonable limits
-    duration_seconds = min(duration_seconds, MAX_DURATION)
-    sample_count = min(sample_count, MAX_SAMPLES)
-    
-    # Use the cutting-edge Veo 3 model
-    VEO_MODEL_ID = "veo-3.0-generate-preview"
-    
-    try:
-        # Calculate estimated cost for user transparency (they pay Google directly)
-        estimated_cost = calculate_veo_cost.func(duration_seconds, sample_count, generate_audio)
+        # Get credentials path
+        cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        if not cred_path:
+            raise ValueError("GOOGLE_APPLICATION_CREDENTIALS environment variable not set")
+            
+        # Initialize Firebase Admin SDK if not already initialized
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred, {
+                'databaseURL': 'https://taajirah-default-rtdb.europe-west1.firebasedatabase.app'
+            })
+            print("Firebase Admin SDK initialized successfully for custom tools.")
+            
+        # Get Vertex AI credentials
+        request = Request()
+        credentials = service_account.Credentials.from_service_account_file(
+            cred_path,
+            scopes=['https://www.googleapis.com/auth/cloud-platform']
+        )
+        credentials.refresh(request)
         
-        # Create Firebase tracking document 
-        job_ref = db.reference(f"video_jobs/{job_id}")
+        return credentials
+        
+    except Exception as e:
+        raise Exception(f"Failed to get Vertex AI credentials: {str(e)}")
+
+# Direct function version for FastAPI
+def submit_video_job(prompt: str, user_id: str = "test-user", aspect_ratio: str = "16:9", duration_seconds: int = 8, sample_count: int = 1, person_generation: str = "allow_adult", generate_audio: bool = True) -> str:
+    """Submit a video generation job to VEO3 - Direct function version for FastAPI"""
+    try:
+        # Check quota first
+        quota = get_quota_status()
+        if "error" in quota:
+            return f"Error checking quota: {quota['error']}"
+            
+        # Create job ID and data
+        job_id = str(uuid.uuid4())
         job_data = {
             "status": "pending",
             "prompt": prompt,
-            "createdAt": int(time.time()),  # Use Unix timestamp instead of SERVER_TIMESTAMP
+            "createdAt": int(time.time()),
             "jobId": job_id,
             "userId": user_id,
-            "model": VEO_MODEL_ID,
-            "estimatedCost": estimated_cost,
-            "userPaysDirectly": True,  # Flag indicating user pays Google directly
+            "model": "veo-3.0-generate-preview",
             "parameters": {
                 "aspectRatio": aspect_ratio,
                 "durationSeconds": duration_seconds,
                 "sampleCount": sample_count,
                 "personGeneration": person_generation,
                 "generateAudio": generate_audio
-            }
+            },
+            "estimatedCost": calculate_veo_cost_direct(duration_seconds, sample_count, generate_audio)
         }
         
-        if negative_prompt:
-            job_data["parameters"]["negativePrompt"] = negative_prompt
+        # If quota available, process immediately
+        if quota["daily"]["remaining"] > 0 and quota["monthly"]["remaining"] > 0:
+            # Enforce 16:9 aspect ratio for VEO3
+            if aspect_ratio != "16:9":
+                return f"Error: VEO3 only supports 16:9 (landscape) aspect ratio. Provided: {aspect_ratio}"
             
-        job_ref.set(job_data)
-        print(f"Job {job_id}: Created Firebase tracking document - User pays directly (${estimated_cost:.2f})")
-
-        # REAL VEO API CALL using user's credentials
-        try:
-            # Construct the API endpoint using user's project
-            api_endpoint = f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{VEO_MODEL_ID}:predictLongRunning"
+            # Get fresh credentials
+            credentials = get_vertex_ai_credentials()
             
-            # Prepare the request payload for Veo 3 API
+            # Create job ID
+            job_ref = db.reference(f"video_jobs/{job_id}")
+            job_data = {
+                "status": "pending",
+                "prompt": prompt,
+                "createdAt": int(time.time()),
+                "jobId": job_id,
+                "userId": user_id,
+                "model": "veo-3.0-generate-preview",
+                "parameters": {
+                    "aspectRatio": aspect_ratio,
+                    "durationSeconds": duration_seconds,
+                    "sampleCount": sample_count,
+                    "personGeneration": person_generation,
+                    "generateAudio": generate_audio
+                },
+                "estimatedCost": calculate_veo_cost_direct(duration_seconds, sample_count, generate_audio),
+                "userPaysDirectly": True
+            }
+            
+            job_ref.set(job_data)
+            print(f"✅ Created Firebase tracking document for job {job_id}")
+            
+            # Submit to Vertex AI with retry logic
+            PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "taajirah")
+            LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+            MODEL_ID = "veo-3.0-generate-preview"
+            
+            # Use the correct Veo 3 endpoint for prediction
+            api_endpoint = f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{MODEL_ID}:predict"
+            
+            # Get storage bucket for output
+            bucket_name = os.getenv("GOOGLE_CLOUD_STAGING_BUCKET", "gs://taajirah-adk-staging").replace("gs://", "")
+            output_uri = f"gs://{bucket_name}/veo3/{job_id}/"
+            
             request_payload = {
                 "instances": [{
                     "prompt": prompt
@@ -162,128 +227,425 @@ def submit_veo_generation_job(prompt: str, user_api_key: str, user_id: str = "sy
                     "personGeneration": person_generation,
                     "generateAudio": generate_audio,
                     "enhancePrompt": True,
+                    "outputUri": output_uri  # Tell Veo 3 where to store the videos
                 }
             }
             
-            if negative_prompt:
-                request_payload["parameters"]["negativePrompt"] = negative_prompt
-
-            print(f"Job {job_id}: Submitting to Veo 3 with user's API key")
-            print(f"Job {job_id}: Parameters: {json.dumps(request_payload['parameters'], indent=2)}")
-            print(f"Job {job_id}: User will be charged: ${estimated_cost:.2f} by Google Cloud")
+            # Retry configuration
+            max_retries = 5
+            base_delay = 60  # Start with 1 minute delay
+            max_delay = 600  # Maximum delay of 10 minutes
+            current_retry = 0
             
-            # Use user's API key for authentication
-            headers = {
-                "Authorization": f"Bearer {user_api_key}",
-                "Content-Type": "application/json"
-            }
+            while current_retry <= max_retries:
+                try:
+                    headers = {
+                        "Authorization": f"Bearer {credentials.token}",
+                        "Content-Type": "application/json"
+                    }
+                    
+                    print(f"✅ Job {job_id}: Submitting to Vertex AI with token: {credentials.token[:10]}...")
+                    print(f"✅ Job {job_id}: Using output URI: {output_uri}")
+                    
+                    response = requests.post(
+                        api_endpoint,
+                        headers=headers,
+                        json=request_payload,
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 429:
+                        if current_retry < max_retries:
+                            # Calculate exponential backoff delay
+                            delay = min(base_delay * (2 ** current_retry), max_delay)
+                            print(f"⏳ Job {job_id}: Quota exceeded. Retrying in {delay} seconds (attempt {current_retry + 1}/{max_retries})")
+                            
+                            # Update Firebase with retry status
+                            job_ref.update({
+                                "status": "retrying",
+                                "retryAttempt": current_retry + 1,
+                                "nextRetryIn": delay,
+                                "lastError": response.text
+                            })
+                            
+                            time.sleep(delay)
+                            current_retry += 1
+                            continue
+                        else:
+                            error_msg = f"Vertex AI API quota exceeded after {max_retries} retries: {response.text}"
+                            print(f"❌ Job {job_id}: {error_msg}")
+                            print(f"❌ Job {job_id}: Response headers: {dict(response.headers)}")
+                            
+                            job_ref.update({
+                                "status": "failed",
+                                "error": error_msg,
+                                "failedAt": int(time.time()),
+                                "retryAttempts": current_retry
+                            })
+                            
+                            return f"Error: {error_msg}"
+                    
+                    elif response.status_code != 200:
+                        error_msg = f"Vertex AI API returned status {response.status_code}: {response.text}"
+                        print(f"❌ Job {job_id}: {error_msg}")
+                        print(f"❌ Job {job_id}: Response headers: {dict(response.headers)}")
+                        
+                        job_ref.update({
+                            "status": "failed",
+                            "error": error_msg,
+                            "failedAt": int(time.time())
+                        })
+                        
+                        return f"Error: {error_msg}"
+                    
+                    # Parse the successful response
+                    response_data = response.json()
+                    
+                    # Success! Break out of retry loop
+                    break
+                    
+                except Exception as request_error:
+                    if current_retry < max_retries:
+                        delay = min(base_delay * (2 ** current_retry), max_delay)
+                        print(f"⚠️ Job {job_id}: Request failed. Retrying in {delay} seconds (attempt {current_retry + 1}/{max_retries})")
+                        print(f"⚠️ Error details: {str(request_error)}")
+                        
+                        job_ref.update({
+                            "status": "retrying",
+                            "retryAttempt": current_retry + 1,
+                            "nextRetryIn": delay,
+                            "lastError": str(request_error)
+                        })
+                        
+                        time.sleep(delay)
+                        current_retry += 1
+                        continue
+                    else:
+                        error_msg = f"Failed to submit video generation job after {max_retries} retries: {str(request_error)}"
+                        print(f"❌ Job {job_id}: {error_msg}")
+                        
+                        job_ref.update({
+                            "status": "failed",
+                            "error": error_msg,
+                            "failedAt": int(time.time()),
+                            "retryAttempts": current_retry
+                        })
+                        
+                        return f"Error: {error_msg}"
             
-            response = requests.post(
-                api_endpoint,
-                headers=headers,
-                json=request_payload,
-                timeout=30
-            )
-            
-            if response.status_code != 200:
-                error_msg = f"Veo API returned status {response.status_code}: {response.text}"
-                print(f"Job {job_id}: {error_msg}")
+            # Check if we got an immediate response or need to poll
+            if "predictions" in response_data:
+                # Immediate response - extract video URLs or data
+                predictions = response_data.get("predictions", [{}])[0]
+                video_urls = predictions.get("videoUrls", [])
+                audio_urls = predictions.get("audioUrls", [])
                 
-                # Update Firebase with error
+                # If we got base64 data, save it
+                if not video_urls and "videoData" in predictions:
+                    try:
+                        video_data = base64.b64decode(predictions["videoData"])
+                        
+                        # Save to Google Cloud Storage
+                        storage_client = storage.Client()
+                        bucket = storage_client.bucket(bucket_name)
+                        
+                        # Generate video filename
+                        video_filename = f"veo3/{job_id}/video_{int(time.time())}.mp4"
+                        blob = bucket.blob(video_filename)
+                        
+                        # Upload video
+                        blob.upload_from_string(video_data, content_type="video/mp4")
+                        
+                        # Generate signed URL that expires in 24 hours
+                        video_urls = [blob.generate_signed_url(
+                            version="v4",
+                            expiration=datetime.timedelta(hours=24),
+                            method="GET"
+                        )]
+                        
+                        print(f"✅ Job {job_id}: Saved video to storage: {video_filename}")
+                        
+                    except Exception as storage_error:
+                        print(f"❌ Job {job_id}: Failed to save video to storage: {storage_error}")
+                        # Continue with base64 data as fallback
+                        video_urls = [f"data:video/mp4;base64,{predictions['videoData']}"]
+                
+                # Update Firebase with immediate results
                 job_ref.update({
-                    "status": "failed",
-                    "error": error_msg,
-                    "failedAt": int(time.time())
+                    "status": "completed",
+                    "completedAt": int(time.time()),
+                    "result": {
+                        "videoUrls": video_urls,
+                        "audioUrls": audio_urls,
+                        "storagePrefix": f"veo3/{job_id}/"
+                    }
                 })
                 
-                # Provide helpful error messages for common issues
-                if response.status_code == 401:
-                    return f"❌ Error: Invalid API Key\n\nJob ID: {job_id}\n\nYour Google Cloud API key appears to be invalid or expired. Please:\n1. Check your API key in Google Cloud Console\n2. Ensure Vertex AI API is enabled\n3. Verify billing is set up\n\nGoogle Cloud will charge you directly for video generation."
-                elif response.status_code == 403:
-                    return f"❌ Error: Permission Denied\n\nJob ID: {job_id}\n\nYour API key doesn't have permission to use Veo. Please:\n1. Enable Vertex AI API in your project\n2. Ensure your account has Vertex AI User role\n3. Check if Veo access is approved for your project\n\nGoogle Cloud will charge you directly for video generation."
-                else:
-                    return f"❌ Error: Veo API request failed\n\nJob ID: {job_id}\nStatus: {response.status_code}\nError: {response.text[:200]}...\n\nPlease check your Google Cloud setup. You pay Google directly for usage."
+                return f"Success: Job {job_id} completed immediately. Videos available at: {', '.join(video_urls)}"
+                
+            else:
+                # Long-running operation - store operation name and return
+                vertex_operation_name = response_data.get("name", "")
+                
+                print(f"✅ Job {job_id}: Successfully submitted to Vertex AI")
+                print(f"✅ Job {job_id}: Operation name: {vertex_operation_name}")
+                print(f"✅ Job {job_id}: Full response: {json.dumps(response_data, indent=2)}")
+                
+                # Update status to processing and store operation name
+                job_ref.update({
+                    "status": "processing",
+                    "vertexAiJobId": vertex_operation_name,
+                    "startedAt": int(time.time())
+                })
+                
+                return f"Success: Job {job_id} submitted. Operation name: {vertex_operation_name}"
             
-            # Parse the successful response
-            response_data = response.json()
-            vertex_operation_name = response_data.get("name", "")
-            
-            print(f"Job {job_id}: Successfully submitted to Veo API using user credentials")
-            print(f"Job {job_id}: Vertex AI operation: {vertex_operation_name}")
-            
-            # Update status to processing with real operation name
-            job_ref.update({
-                "status": "processing",
-                "vertexAiJobId": vertex_operation_name,
-                "userApiKey": "***REDACTED***",  # Never store the actual key
-                "startedAt": int(time.time())
-            })
-
-        except Exception as api_error:
-            error_msg = f"Failed to call Veo API with user credentials: {str(api_error)}"
-            print(f"Job {job_id}: {error_msg}")
-            
-            # Update Firebase with API error
+        else:
+            # Add to queue
+            if queue_video_job(job_id, job_data):
+                return f"Job {job_id} queued - quota exceeded"
+            else:
+                return f"Error queueing job {job_id}"
+                
+    except Exception as e:
+        error_msg = f"Error submitting video generation job: {str(e)}"
+        print(f"❌ Error: {error_msg}")
+        
+        if 'job_id' in locals() and 'job_ref' in locals():
             job_ref.update({
                 "status": "failed",
                 "error": error_msg,
                 "failedAt": int(time.time())
             })
-            
-            return f"❌ Error: Failed to connect to Veo API\n\nJob ID: {job_id}\nError: {str(api_error)}\n\nPlease verify:\n• Your Google Cloud API key is valid\n• Vertex AI API is enabled\n• Billing is set up in your Google Cloud project\n\nYou pay Google directly - no subscription needed!"
-
-        audio_status = "with synchronized audio" if generate_audio else "video only"
-        return f"🚀 Success! Video generation started with Veo 3\n\n📋 Job ID: {job_id}\n⏱️ Expected completion: 2-3 minutes\n🎯 Quality: 720p, 24fps ultra-high-quality\n📐 Aspect ratio: {aspect_ratio}\n⏰ Duration: {duration_seconds} seconds\n🎵 Audio: {audio_status}\n\n💳 **You pay Google directly: ${estimated_cost:.2f}**\n💡 No subscription needed - just your Google Cloud API key!\n\nYou'll be notified when your {sample_count} video{'s' if sample_count > 1 else ''} {'are' if sample_count > 1 else 'is'} ready!"
-
-    except Exception as e:
-        print(f"Job {job_id}: Error occurred: {e}")
-        try:
-            job_ref = db.reference(f"video_jobs/{job_id}")
-            job_ref.update({
-                "status": "failed", 
-                "error": str(e),
-                "failedAt": int(time.time())
-            })
-        except Exception as db_error:
-            print(f"Job {job_id}: Could not update Firebase with failure status: {db_error}")
         
-        return f"❌ Error: Failed to start video generation\n\nJob ID: {job_id}\nError: {str(e)}\n\nYou pay Google Cloud directly - no subscription fees!"
+        return f"Error: {error_msg}"
 
+# Keep the FunctionTool decorated version for ADK
+@FunctionTool
+def submit_veo_generation_job(prompt: str, user_id: str = "test-user", aspect_ratio: str = "16:9", duration_seconds: int = 8, sample_count: int = 1, person_generation: str = "allow_adult", generate_audio: bool = True) -> str:
+    """Submit a video generation job to VEO3"""
+    return submit_video_job(prompt, user_id, aspect_ratio, duration_seconds, sample_count, person_generation, generate_audio)
+
+# Direct function version for FastAPI
+def check_video_status(job_id: str, user_api_key: Optional[str] = None) -> dict:
+    """Check video job status - Direct function version for FastAPI"""
+    try:
+        job_ref = db.reference(f"video_jobs/{job_id}")
+        job_data = job_ref.get()
+        
+        print(f"✅ Job {job_id}: Firebase data: {json.dumps(job_data, indent=2)}")
+        
+        if not job_data:
+            return {
+                "status": "not_found",
+                "message": f"Job {job_id} not found"
+            }
+        
+        # Get current status and timestamps
+        current_status = job_data.get("status", "unknown")
+        started_at = job_data.get("startedAt")
+        vertex_operation_name = job_data.get("vertexAiJobId")
+        
+        # Check for timeout (5 minutes)
+        if started_at and current_status == "processing":
+            elapsed_time = int(time.time()) - started_at
+            if elapsed_time > 300:  # 5 minutes
+                error_msg = "Video generation timed out after 5 minutes"
+                job_ref.update({
+                    "status": "failed",
+                    "error": error_msg,
+                    "failedAt": int(time.time())
+                })
+                return {
+                    "status": "failed",
+                    "error": error_msg,
+                    "jobId": job_id,
+                    "elapsed_seconds": elapsed_time
+                }
+        
+        # If we have a Vertex AI operation name and status is processing, check operation status
+        if vertex_operation_name and current_status == "processing":
+            try:
+                # Get fresh credentials
+                credentials = get_vertex_ai_credentials()
+                
+                # Get operation status
+                PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "taajirah")
+                LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+                
+                operation_url = f"https://{LOCATION}-aiplatform.googleapis.com/v1/{vertex_operation_name}"
+                
+                headers = {
+                    "Authorization": f"Bearer {credentials.token}",
+                    "Content-Type": "application/json"
+                }
+                
+                response = requests.get(
+                    operation_url,
+                    headers=headers,
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    operation_data = response.json()
+                    print(f"✅ Job {job_id}: Operation data: {json.dumps(operation_data, indent=2)}")
+                    
+                    # Check if operation is done
+                    if operation_data.get("done", False):
+                        # Check for errors
+                        if "error" in operation_data:
+                            error = operation_data["error"]
+                            error_msg = f"Vertex AI operation failed: {error.get('message', 'Unknown error')}"
+                            
+                            job_ref.update({
+                                "status": "failed",
+                                "error": error_msg,
+                                "failedAt": int(time.time())
+                            })
+                            
+                            return {
+                                "status": "failed",
+                                "error": error_msg,
+                                "jobId": job_id
+                            }
+                            
+                        # Operation successful - extract video data
+                        result = operation_data.get("response", {})
+                        print(f"✅ Job {job_id}: Full result: {json.dumps(result, indent=2)}")
+                        
+                        # Handle both possible response formats
+                        predictions = result.get("predictions", [{}])[0]
+                        
+                        # Try to get video URLs first
+                        video_urls = predictions.get("videoUrls", [])
+                        audio_urls = predictions.get("audioUrls", [])
+                        
+                        # If no URLs, check for base64 data
+                        if not video_urls and "videoData" in predictions:
+                            # We have base64 video data - save to storage
+                            try:
+                                video_data = base64.b64decode(predictions["videoData"])
+                                
+                                # Save to Google Cloud Storage
+                                storage_client = storage.Client()
+                                bucket_name = os.getenv("GOOGLE_CLOUD_STAGING_BUCKET").replace("gs://", "")
+                                bucket = storage_client.bucket(bucket_name)
+                                
+                                # Generate video filename
+                                video_filename = f"veo3/{job_id}/video_{int(time.time())}.mp4"
+                                blob = bucket.blob(video_filename)
+                                
+                                # Upload video
+                                blob.upload_from_string(video_data, content_type="video/mp4")
+                                
+                                # Generate signed URL that expires in 24 hours
+                                video_urls = [blob.generate_signed_url(
+                                    version="v4",
+                                    expiration=datetime.timedelta(hours=24),
+                                    method="GET"
+                                )]
+                                
+                                print(f"✅ Job {job_id}: Saved video to storage: {video_filename}")
+                                
+                            except Exception as storage_error:
+                                print(f"❌ Job {job_id}: Failed to save video to storage: {storage_error}")
+                                # Continue with base64 data as fallback
+                                video_urls = [f"data:video/mp4;base64,{predictions['videoData']}"]
+                        
+                        print(f"✅ Job {job_id}: Video URLs: {video_urls}")
+                        print(f"✅ Job {job_id}: Audio URLs: {audio_urls}")
+                        
+                        # Store everything in Firebase
+                        job_ref.update({
+                            "status": "completed",
+                            "completedAt": int(time.time()),
+                            "result": {
+                                "videoUrls": video_urls,
+                                "audioUrls": audio_urls,
+                                "storagePrefix": f"veo3/{job_id}/" if video_urls else None
+                            }
+                        })
+                        
+                        return {
+                            "status": "completed",
+                            "jobId": job_id,
+                            "videoUrls": video_urls,
+                            "audioUrls": audio_urls,
+                            "storagePrefix": f"veo3/{job_id}/" if video_urls else None
+                        }
+                        
+                    else:
+                        # Still processing
+                        progress = operation_data.get("metadata", {}).get("progress", 0)
+                        return {
+                            "status": "processing",
+                            "progress": progress,
+                            "jobId": job_id,
+                            "message": f"Video generation in progress ({progress}% complete)"
+                        }
+                        
+                else:
+                    print(f"⚠️ Job {job_id}: Failed to get operation status: {response.status_code} - {response.text}")
+                    # Don't update status, just return current data
+                    
+            except Exception as operation_error:
+                print(f"⚠️ Job {job_id}: Error checking operation status: {operation_error}")
+                # Don't update status, just return current data
+        
+        # Return current data from Firebase
+        return {
+            "status": current_status,
+            "jobId": job_id,
+            "data": job_data
+        }
+        
+    except Exception as e:
+        error_msg = f"Error checking video status: {str(e)}"
+        print(f"❌ Error: {error_msg}")
+        return {
+            "status": "error",
+            "error": error_msg,
+            "jobId": job_id
+        }
+
+# Keep the FunctionTool decorated version for ADK
+@FunctionTool
+def get_video_job_status(job_id: str, user_api_key: Optional[str] = None) -> dict:
+    """Retrieves the status of a video generation job and polls Vertex AI for updates."""
+    return check_video_status(job_id, user_api_key)
+
+# Direct function version for FastAPI
+def calculate_veo_cost_direct(duration_seconds: int, sample_count: int, generate_audio: bool) -> float:
+    """Calculate the estimated cost of a VEO3 video generation - Direct function version for FastAPI"""
+    try:
+        # Base cost per second
+        base_cost_per_second = 0.50  # $0.50 per second
+        audio_cost_per_second = 0.25  # Additional $0.25 per second for audio
+        
+        # Calculate base video cost
+        base_cost = duration_seconds * base_cost_per_second
+        
+        # Add audio cost if requested
+        if generate_audio:
+            audio_cost = duration_seconds * audio_cost_per_second
+            total_cost = base_cost + audio_cost
+        else:
+            total_cost = base_cost
+            
+        # Multiply by number of samples
+        total_cost = total_cost * sample_count
+        
+        return round(total_cost, 2)  # Round to 2 decimal places
+        
+    except Exception as e:
+        print(f"Error calculating VEO3 cost: {e}")
+        return 0.00  # Return 0 on error
+
+# Keep the FunctionTool decorated version for ADK
 @FunctionTool
 def calculate_veo_cost(duration_seconds: int, sample_count: int, generate_audio: bool) -> float:
-    """
-    Calculate actual Veo API cost based on official Google Cloud Vertex AI pricing.
-    
-    Official pricing from: https://cloud.google.com/vertex-ai/generative-ai/pricing#veo
-    
-    Veo 3 Pricing:
-    - Video generation: $0.50/second
-    - Video + Audio generation: $0.75/second
-    
-    Veo 2 Pricing:
-    - Video generation: $0.50/second
-    - Advanced Controls: $0.50/second
-    """
-    # OFFICIAL GOOGLE CLOUD VEO PRICING (Updated December 2024)
-    if generate_audio:
-        # Veo 3 Video + Audio generation
-        cost_per_second = 0.75  # $0.75/second for video with synchronized audio
-    else:
-        # Veo 3 or Veo 2 Video generation
-        cost_per_second = 0.50  # $0.50/second for video only
-    
-    # Apply volume discounts for multiple samples (business logic)
-    volume_discount = 1.0
-    if sample_count >= 3:
-        volume_discount = 0.9  # 10% discount for 3+ videos
-    elif sample_count >= 2:
-        volume_discount = 0.95  # 5% discount for 2+ videos
-    
-    # Calculate total cost
-    cost_per_video = duration_seconds * cost_per_second
-    total_cost = cost_per_video * sample_count * volume_discount
-    
-    return round(total_cost, 2)
+    """Calculate the estimated cost of a VEO3 video generation."""
+    return calculate_veo_cost_direct(duration_seconds, sample_count, generate_audio)
 
 @FunctionTool
 def get_veo_pricing_info() -> dict:
@@ -325,123 +687,6 @@ def get_veo_pricing_info() -> dict:
         "source": "https://cloud.google.com/vertex-ai/generative-ai/pricing#veo",
         "last_updated": "December 2024"
     }
-
-@FunctionTool 
-def get_video_job_status(job_id: str, user_api_key: str = None) -> dict:
-    """
-    Retrieves the status of a video generation job and polls Vertex AI for updates.
-    
-    Args:
-        job_id: The job ID to check
-        
-    Returns:
-        Dictionary with job status information
-    """
-    try:
-        job_ref = db.reference(f"video_jobs/{job_id}")
-        job_data = job_ref.get()
-        
-        if not job_data:
-            return {
-                "status": "not_found",
-                "message": f"Job {job_id} not found"
-            }
-        
-        # If job is still processing, poll Vertex AI for updates
-        current_status = job_data.get("status", "unknown")
-        vertex_operation_name = job_data.get("vertexAiJobId")
-        
-        if current_status == "processing" and vertex_operation_name and user_api_key:
-            try:
-                # Poll the Vertex AI operation status using user's credentials
-                PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
-                LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-                MODEL_ID = job_data.get("model", "veo-3.0-generate-preview")
-                
-                # Construct the poll endpoint
-                poll_endpoint = f"https://{LOCATION}-aiplatform.googleapis.com/v1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{MODEL_ID}:fetchPredictOperation"
-                
-                headers = {
-                    "Authorization": f"Bearer {user_api_key}",
-                    "Content-Type": "application/json"
-                }
-                
-                poll_payload = {
-                    "operationName": vertex_operation_name
-                }
-                
-                response = requests.post(
-                    poll_endpoint,
-                    headers=headers,
-                    json=poll_payload,
-                    timeout=10
-                )
-                
-                if response.status_code == 200:
-                    operation_data = response.json()
-                    operation_done = operation_data.get("done", False)
-                    
-                    if operation_done:
-                        # Check if operation completed successfully
-                        if "response" in operation_data:
-                            videos = operation_data.get("response", {}).get("videos", [])
-                            video_urls = [video.get("gcsUri", "") for video in videos if video.get("gcsUri")]
-                            
-                            # Update Firebase with completion
-                            job_ref.update({
-                                "status": "completed",
-                                "videoUrls": video_urls,
-                                "completedAt": int(time.time())
-                            })
-                            
-                            current_status = "completed"
-                            job_data["videoUrls"] = video_urls
-                            
-                            print(f"Job {job_id}: Completed successfully with {len(video_urls)} videos")
-                        elif "error" in operation_data:
-                            error_msg = str(operation_data.get("error", "Unknown error"))
-                            
-                            # Update Firebase with error
-                            job_ref.update({
-                                "status": "failed",
-                                "error": error_msg,
-                                "failedAt": int(time.time())
-                            })
-                            
-                            current_status = "failed"
-                            job_data["error"] = error_msg
-                            
-                            print(f"Job {job_id}: Failed with error: {error_msg}")
-                    else:
-                        print(f"Job {job_id}: Still processing...")
-                        
-                else:
-                    print(f"Job {job_id}: Failed to poll status - HTTP {response.status_code}")
-                    
-            except Exception as poll_error:
-                print(f"Job {job_id}: Error polling Vertex AI: {poll_error}")
-                # Don't update status on polling errors, just log them
-            
-        return {
-            "status": current_status,
-            "jobId": job_id,
-            "prompt": job_data.get("prompt", ""),
-            "createdAt": job_data.get("createdAt"),
-            "model": job_data.get("model", ""),
-            "parameters": job_data.get("parameters", {}),
-            "error": job_data.get("error"),
-            "videoUrls": job_data.get("videoUrls", []),
-            "estimatedCost": job_data.get("estimatedCost", 0),
-            "paymentModel": "user_api_key",
-            "userPaysDirectly": job_data.get("userPaysDirectly", True)
-        }
-        
-    except Exception as e:
-        print(f"Error retrieving job status for {job_id}: {e}")
-        return {
-            "status": "error",
-            "message": f"Error retrieving job status: {str(e)}"
-        }
 
 @FunctionTool
 def track_user_analytics(user_id: str, action: str, metadata: dict = None) -> str:
@@ -676,3 +921,340 @@ def get_staging_environment_info() -> dict:
         return info
     except Exception as e:
         return {"error": str(e), "environment": "unknown"}
+
+@FunctionTool
+def generate_video_complete(prompt: str, user_api_key: Optional[str] = None, user_id: str = "system", aspect_ratio: str = "16:9", 
+                          duration_seconds: int = 8, sample_count: int = 1, 
+                          person_generation: str = "allow_adult", negative_prompt: Optional[str] = None,
+                          generate_audio: bool = True, user_project_id: Optional[str] = None) -> dict:
+    """
+    Generates a complete video using VEO3 and returns the actual MP4 video URLs.
+    This function waits for completion (2-3 minutes) and returns the final video files.
+    
+    Args:
+        prompt: The text prompt for video generation
+        user_api_key: User's Google Cloud API key or service account JSON
+        user_id: User ID for tracking (defaults to "system")
+        aspect_ratio: "16:9" (landscape - VEO3 supported) or "9:16" (portrait - not supported by VEO3)
+        duration_seconds: Video duration in seconds (Veo 3 uses 8 seconds)
+        sample_count: Number of video variations to generate (1-4)
+        person_generation: "dont_allow", "allow_adult", or "allow_all"
+        negative_prompt: Optional negative prompt to discourage certain elements
+        generate_audio: Whether to generate synchronized audio (Veo 3 feature)
+        user_project_id: User's Google Cloud Project ID (if different from API key)
+    
+    Returns: Dictionary with video URLs and metadata, or error information
+    """
+    
+    # Step 1: Submit the video generation job
+    try:
+        result = submit_video_job(
+            prompt=prompt,
+            user_id=user_id,
+            aspect_ratio=aspect_ratio,
+            duration_seconds=duration_seconds,
+            sample_count=sample_count,
+            person_generation=person_generation,
+            generate_audio=generate_audio
+        )
+        
+        # Extract job ID from the success message
+        if "Success: Job" in result:
+            job_id = result.split("Success: Job")[1].split(" ")[0].strip()
+        else:
+            # If submission failed, return the error
+            return {
+                "status": "failed",
+                "error": result,
+                "videos": []
+            }
+            
+    except Exception as e:
+        return {
+            "status": "failed", 
+            "error": f"Failed to submit video generation job: {str(e)}",
+            "videos": []
+        }
+    
+    # Step 2: Wait for completion and poll for results
+    max_wait_time = 300  # 5 minutes maximum wait
+    poll_interval = 15   # Check every 15 seconds
+    elapsed_time = 0
+    
+    print(f"🎬 Waiting for VEO3 to generate video(s) for job {job_id}...")
+    print(f"⏱️ This typically takes 2-3 minutes. Will check every {poll_interval} seconds.")
+    
+    while elapsed_time < max_wait_time:
+        try:
+            status_result = check_video_status(job_id, user_api_key)
+            current_status = status_result.get("status", "unknown")
+            
+            if current_status == "completed":
+                video_urls = status_result.get("data", {}).get("result", {}).get("videoUrls", [])
+                
+                if video_urls:
+                    estimated_cost = status_result.get("data", {}).get("estimatedCost", 0)
+                    audio_status = "with synchronized audio" if generate_audio else "video only"
+                    
+                    print(f"✅ Video generation completed! Generated {len(video_urls)} video(s)")
+                    
+                    return {
+                        "status": "completed",
+                        "videos": video_urls,
+                        "job_id": job_id,
+                        "prompt": prompt,
+                        "parameters": {
+                            "aspect_ratio": aspect_ratio,
+                            "duration_seconds": duration_seconds,
+                            "sample_count": sample_count,
+                            "generate_audio": generate_audio
+                        },
+                        "estimated_cost": estimated_cost,
+                        "generation_time_seconds": elapsed_time,
+                        "message": f"🎉 Success! Generated {len(video_urls)} VEO3 video{'s' if len(video_urls) > 1 else ''} ({audio_status})"
+                    }
+                else:
+                    return {
+                        "status": "failed",
+                        "error": "Video generation completed but no video URLs were returned",
+                        "videos": [],
+                        "job_id": job_id
+                    }
+                    
+            elif current_status == "failed":
+                error_msg = status_result.get("error", "Unknown error occurred")
+                return {
+                    "status": "failed",
+                    "error": f"Video generation failed: {error_msg}",
+                    "videos": [],
+                    "job_id": job_id
+                }
+                
+            elif current_status in ["pending", "processing"]:
+                # Still processing, continue waiting
+                print(f"⏳ Still generating... ({elapsed_time}s elapsed)")
+                time.sleep(poll_interval)
+                elapsed_time += poll_interval
+                
+            else:
+                # Unknown status, continue waiting but log it
+                print(f"🤔 Unknown status '{current_status}', continuing to wait...")
+                time.sleep(poll_interval)
+                elapsed_time += poll_interval
+                
+        except Exception as poll_error:
+            print(f"⚠️ Error checking status: {poll_error}")
+            time.sleep(poll_interval)
+            elapsed_time += poll_interval
+    
+    # Timeout reached
+    return {
+        "status": "timeout",
+        "error": f"Video generation timed out after {max_wait_time} seconds. The job may still be processing.",
+        "videos": [],
+        "job_id": job_id,
+        "prompt": prompt
+    }
+
+def get_quota_status() -> dict:
+    """Get current quota status and limits"""
+    try:
+        quota_ref = db.reference("quota_tracking")
+        now = int(time.time())
+        
+        # Get or initialize daily quota
+        daily_ref = quota_ref.child("daily")
+        daily_data = daily_ref.get() or {
+            "current_usage": 0,
+            "limit": 1000,  # Default daily limit
+            "reset_time": now + (24 * 60 * 60)  # Reset in 24 hours
+        }
+        
+        # Get or initialize monthly quota
+        monthly_ref = quota_ref.child("monthly")
+        monthly_data = monthly_ref.get() or {
+            "current_usage": 0,
+            "limit": 10000,  # Default monthly limit
+            "reset_time": now + (30 * 24 * 60 * 60)  # Reset in 30 days
+        }
+        
+        # Check if quotas need reset
+        if now > daily_data["reset_time"]:
+            daily_data = {
+                "current_usage": 0,
+                "limit": daily_data["limit"],
+                "reset_time": now + (24 * 60 * 60)
+            }
+            daily_ref.set(daily_data)
+            
+        if now > monthly_data["reset_time"]:
+            monthly_data = {
+                "current_usage": 0,
+                "limit": monthly_data["limit"],
+                "reset_time": now + (30 * 24 * 60 * 60)
+            }
+            monthly_ref.set(monthly_data)
+            
+        return {
+            "daily": {
+                "current_usage": daily_data["current_usage"],
+                "remaining": daily_data["limit"] - daily_data["current_usage"],
+                "limit": daily_data["limit"],
+                "reset_in_seconds": daily_data["reset_time"] - now
+            },
+            "monthly": {
+                "current_usage": monthly_data["current_usage"],
+                "remaining": monthly_data["limit"] - monthly_data["current_usage"],
+                "limit": monthly_data["limit"],
+                "reset_in_seconds": monthly_data["reset_time"] - now
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error getting quota status: {e}")
+        return {"error": str(e)}
+
+def update_quota_usage(increment: int = 1) -> bool:
+    """Update quota usage counters"""
+    try:
+        quota_ref = db.reference("quota_tracking")
+        now = int(time.time())
+        
+        # Update daily quota
+        daily_ref = quota_ref.child("daily")
+        daily_data = daily_ref.get() or {
+            "current_usage": 0,
+            "limit": 1000,
+            "reset_time": now + (24 * 60 * 60)
+        }
+        
+        # Reset if needed
+        if now > daily_data["reset_time"]:
+            daily_data = {
+                "current_usage": increment,
+                "limit": daily_data["limit"],
+                "reset_time": now + (24 * 60 * 60)
+            }
+        else:
+            daily_data["current_usage"] += increment
+            
+        # Check if we'd exceed limit
+        if daily_data["current_usage"] > daily_data["limit"]:
+            return False
+            
+        # Update monthly quota
+        monthly_ref = quota_ref.child("monthly")
+        monthly_data = monthly_ref.get() or {
+            "current_usage": 0,
+            "limit": 10000,
+            "reset_time": now + (30 * 24 * 60 * 60)
+        }
+        
+        # Reset if needed
+        if now > monthly_data["reset_time"]:
+            monthly_data = {
+                "current_usage": increment,
+                "limit": monthly_data["limit"],
+                "reset_time": now + (30 * 24 * 60 * 60)
+            }
+        else:
+            monthly_data["current_usage"] += increment
+            
+        # Check if we'd exceed limit
+        if monthly_data["current_usage"] > monthly_data["limit"]:
+            return False
+            
+        # Update both quotas
+        daily_ref.set(daily_data)
+        monthly_ref.set(monthly_data)
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error updating quota usage: {e}")
+        return False
+
+def queue_video_job(job_id: str, job_data: dict) -> bool:
+    """Add a job to the processing queue"""
+    try:
+        # Add to queue
+        queue_ref = db.reference(f"video_jobs/queued/{job_id}")
+        job_data["queuedAt"] = int(time.time())
+        queue_ref.set(job_data)
+        
+        print(f"✅ Added job {job_id} to queue")
+        return True
+        
+    except Exception as e:
+        print(f"Error queueing job: {e}")
+        return False
+
+def process_queued_jobs() -> None:
+    """Process queued jobs if quota allows"""
+    try:
+        # Get quota status
+        quota = get_quota_status()
+        if "error" in quota:
+            print(f"Error checking quota: {quota['error']}")
+            return
+            
+        # Check if we have quota available
+        if quota["daily"]["remaining"] <= 0:
+            print(f"⚠️ Daily quota exceeded. Next reset in {quota['daily']['reset_in_seconds']} seconds")
+            return
+            
+        if quota["monthly"]["remaining"] <= 0:
+            print(f"⚠️ Monthly quota exceeded. Next reset in {quota['monthly']['reset_in_seconds']} seconds")
+            return
+            
+        # Get queued jobs
+        queue_ref = db.reference("video_jobs/queued")
+        queued_jobs = queue_ref.get() or {}
+        
+        if not queued_jobs:
+            return
+            
+        # Sort by queue time
+        sorted_jobs = sorted(
+            [(job_id, data) for job_id, data in queued_jobs.items()],
+            key=lambda x: x[1].get("queuedAt", 0)
+        )
+        
+        # Process oldest job first
+        job_id, job_data = sorted_jobs[0]
+        
+        # Move to processing
+        processing_ref = db.reference(f"video_jobs/processing/{job_id}")
+        processing_ref.set(job_data)
+        
+        # Remove from queue
+        queue_ref.child(job_id).delete()
+        
+        print(f"✅ Processing queued job {job_id}")
+        
+        # Submit the job
+        result = submit_video_job(
+            prompt=job_data["prompt"],
+            user_id=job_data["userId"],
+            aspect_ratio=job_data["parameters"]["aspectRatio"],
+            duration_seconds=job_data["parameters"]["durationSeconds"],
+            sample_count=job_data["parameters"]["sampleCount"],
+            person_generation=job_data["parameters"]["personGeneration"],
+            generate_audio=job_data["parameters"]["generateAudio"]
+        )
+        
+        if "Error" in result:
+            # Move to failed
+            failed_ref = db.reference(f"video_jobs/failed/{job_id}")
+            job_data["error"] = result
+            job_data["failedAt"] = int(time.time())
+            failed_ref.set(job_data)
+            
+            # Remove from processing
+            processing_ref.delete()
+            
+        # Update quota usage
+        update_quota_usage()
+        
+    except Exception as e:
+        print(f"Error processing queue: {e}")

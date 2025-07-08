@@ -12,12 +12,29 @@
     },
     "messages": {
       "$sessionId": {
-        ".read": "auth != null && root.child('sessions').child(auth.uid).child($sessionId).exists()",
-        ".write": "auth != null && root.child('sessions').child(auth.uid).child($sessionId).exists()",
+        ".read": "auth != null && (root.child('sessions').child(auth.uid).child($sessionId).exists() || auth.token.email == 'taajirah-agents@taajirah.iam.gserviceaccount.com')",
+        ".write": "auth != null && (root.child('sessions').child(auth.uid).child($sessionId).exists() || auth.token.email == 'taajirah-agents@taajirah.iam.gserviceaccount.com')",
         "$messageId": {
           ".validate": "newData.hasChildren(['type', 'content', 'timestamp', 'sessionId'])"
         }
       }
+    },
+    "video_jobs": {
+      "$jobId": {
+        ".read": "auth != null || auth.token.email == 'taajirah-agents@taajirah.iam.gserviceaccount.com'",
+        ".write": "auth != null || auth.token.email == 'taajirah-agents@taajirah.iam.gserviceaccount.com'",
+        ".validate": "newData.hasChildren(['status', 'prompt', 'createdAt', 'jobId', 'userId', 'model'])"
+      }
+    },
+    "user_usage": {
+      "$userId": {
+        ".read": "auth != null && (auth.uid == $userId || auth.token.email == 'taajirah-agents@taajirah.iam.gserviceaccount.com')",
+        ".write": "auth != null && (auth.uid == $userId || auth.token.email == 'taajirah-agents@taajirah.iam.gserviceaccount.com')"
+      }
+    },
+    "analytics": {
+      ".read": "auth != null || auth.token.email == 'taajirah-agents@taajirah.iam.gserviceaccount.com'",
+      ".write": "auth != null || auth.token.email == 'taajirah-agents@taajirah.iam.gserviceaccount.com'"
     }
   }
 }

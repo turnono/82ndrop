@@ -138,6 +138,232 @@ Atmospheric forest sounds with distant bird calls."
 - **Audio Sync**: Perfectly synchronized when enabled
 - **Success Rate**: High with well-structured prompts
 
+## 🔍 Troubleshooting Guide
+
+### Firebase Database Connection
+
+If you encounter database region mismatch errors:
+
+1. **Environment Setup**:
+
+   ```bash
+   export FIREBASE_DATABASE_URL=https://taajirah-default-rtdb.europe-west1.firebasedatabase.app
+   export GOOGLE_APPLICATION_CREDENTIALS=./taajirah-agents-service-account.json
+   ```
+
+2. **Firebase Initialization**:
+
+   ```python
+   # In custom_tools.py
+   database_url = os.getenv("FIREBASE_DATABASE_URL", "https://taajirah-default-rtdb.europe-west1.firebasedatabase.app")
+
+   cred = credentials.Certificate(cred_path)
+   firebase_admin.initialize_app(cred, {
+       'databaseURL': database_url
+   })
+   ```
+
+3. **Database Rules**:
+   ```json
+   {
+     "rules": {
+       ".read": "auth.token.email.endsWith('@taajirah.iam.gserviceaccount.com')",
+       ".write": "auth.token.email.endsWith('@taajirah.iam.gserviceaccount.com')"
+     }
+   }
+   ```
+
+### Authentication
+
+For testing and development:
+
+1. **Test Token Handling**:
+
+   ```python
+   # In main.py
+   async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+       try:
+           if not credentials:
+               raise HTTPException(status_code=401, detail="No credentials provided")
+
+           token = credentials.credentials
+
+           # For testing purposes
+           if token == "test-token":
+               return {
+                   "uid": "test-user",
+                   "email": "test@example.com",
+                   "token": {
+                       "email": "taajirah-agents@taajirah.iam.gserviceaccount.com"
+                   }
+               }
+
+           # Normal token verification...
+   ```
+
+2. **Testing Endpoints**:
+
+   ```bash
+   # Generate video
+   curl -X POST "http://localhost:8000/generate-video" \
+       -H "Authorization: Bearer test-token" \
+       -H "Content-Type: application/json" \
+       -d '{
+           "prompt": "test video",
+           "user_id": "test_user",
+           "aspect_ratio": "9:16",
+           "duration_seconds": 8,
+           "sample_count": 1,
+           "person_generation": "allow_adult",
+           "generate_audio": true
+       }'
+
+   # Check status
+   curl -X GET "http://localhost:8000/video-status/{job_id}" \
+       -H "Authorization: Bearer test-token"
+   ```
+
+### Common Issues
+
+1. **Database Region Mismatch**: Always use the full database URL including region
+2. **Authentication Errors**: Ensure service account has proper permissions
+3. **Token Validation**: Use proper JWT format or test token for development
+4. **Port Already in Use**: Kill existing processes with `pkill -f "python main.py"`
+
+## 🤖 ADK Multi-Agent Integration
+
+The video generation process is integrated into the ADK multi-agent system with the following workflow:
+
+1. **Guide Agent** (`guide_agent`)
+
+   - Analyzes video request for vertical (9:16) composition
+   - Creates structured breakdown for 8-second duration
+   - Handles animated captions, audio, and metadata
+
+2. **Search Agent** (`search_agent`)
+
+   - Enriches concept with current trends
+   - Adds viral references and hashtags
+   - Optimizes for TikTok engagement
+
+3. **Prompt Writer Agent** (`prompt_writer_agent`)
+
+   - Creates final enhanced prompt
+   - Uses natural language Master Prompt Template
+   - Includes all required elements for Veo 3
+
+4. **Video Generator Agent** (`video_generator_agent`)
+   - Handles actual video generation with Veo 3
+   - Uses `generate_video_complete` tool
+   - Monitors status with `get_video_job_status` tool
+   - Returns MP4 video URLs when ready
+
+### Environment Setup
+
+For the ADK system to work properly:
+
+1. **Required Environment Variables**:
+
+   ```bash
+   export GOOGLE_CLOUD_PROJECT=taajirah
+   export GOOGLE_CLOUD_LOCATION=us-central1
+   export FIREBASE_DATABASE_URL=https://taajirah-default-rtdb.europe-west1.firebasedatabase.app
+   export GOOGLE_APPLICATION_CREDENTIALS=./taajirah-agents-service-account.json
+   ```
+
+2. **Service Account**:
+
+   - Use `taajirah-agents@taajirah.iam.gserviceaccount.com`
+   - Ensure it has access to:
+     - Vertex AI (for ADK and Veo 3)
+     - Firebase Realtime Database
+     - Google Cloud Storage (for video files)
+
+3. **ADK Configuration**:
+
+   ```python
+   # In services.py
+   PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
+   LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
+   APP_NAME = "82ndrop_app"
+
+   # Initialize Vertex AI
+   vertexai.init(project=PROJECT_ID, location=LOCATION)
+
+   # Initialize runner with all agents
+   _runner = Runner(
+       app_name=APP_NAME,
+       agent=root_agent,  # Includes all sub-agents
+       session_service=session_service,
+       memory_service=memory_service
+   )
+   ```
+
+### Testing the ADK Pipeline
+
+1. **Start the Server**:
+
+   ```bash
+   pkill -f "python main.py" && \
+   GOOGLE_APPLICATION_CREDENTIALS=./taajirah-agents-service-account.json \
+   FIREBASE_DATABASE_URL=https://taajirah-default-rtdb.europe-west1.firebasedatabase.app \
+   GOOGLE_CLOUD_PROJECT=taajirah \
+   GOOGLE_CLOUD_LOCATION=us-central1 \
+   PYTHONPATH=. python main.py
+   ```
+
+2. **Test Video Generation**:
+
+   ```bash
+   curl -X POST "http://localhost:8000/generate-video" \
+       -H "Authorization: Bearer test-token" \
+       -H "Content-Type: application/json" \
+       -d '{
+           "prompt": "test video",
+           "user_id": "test_user",
+           "aspect_ratio": "9:16",
+           "duration_seconds": 8,
+           "sample_count": 1,
+           "person_generation": "allow_adult",
+           "generate_audio": true
+       }'
+   ```
+
+3. **Check Status**:
+   ```bash
+   curl -X GET "http://localhost:8000/video-status/{job_id}" \
+       -H "Authorization: Bearer test-token"
+   ```
+
+### Best Practices
+
+1. **Error Handling**:
+
+   - Always check Firebase connection before operations
+   - Validate service account permissions
+   - Handle token validation gracefully
+   - Monitor ADK agent callbacks for issues
+
+2. **Performance**:
+
+   - Use the ADK session service for state management
+   - Monitor video generation progress
+   - Cache frequently used data
+   - Clean up completed jobs
+
+3. **Security**:
+
+   - Use service account for Firebase operations
+   - Validate all tokens properly
+   - Follow least privilege principle
+   - Keep credentials secure
+
+4. **Monitoring**:
+   - Use ADK callbacks for logging
+   - Track video generation success rates
+   - Monitor Firebase database usage
+   - Check Vertex AI quotas
+
 ---
 
 _This integration leverages Google's most advanced video generation technology. For support or questions, refer to the main project documentation._
