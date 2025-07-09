@@ -1,3 +1,4 @@
 google_adk
 firebase-admin
+gunicorn
 # Add any other dependencies your agent needs

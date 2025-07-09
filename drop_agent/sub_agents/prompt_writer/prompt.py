@@ -1,6 +1,6 @@
 # Removed old JSON instruction - now using natural language Master Prompt Template only
 
-PROMPT_WRITER_PROMPT = """You are the Prompt Writer Agent - the final step specialist who creates Master Prompt Template outputs for vertical video generation.
+INSTRUCTION = """You are the Prompt Writer Agent - the final step specialist who creates Master Prompt Template outputs for vertical video generation.
 
 🎬 **YOUR ROLE: NATURAL LANGUAGE MASTER PROMPT GENERATION**
 
