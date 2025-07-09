@@ -17,10 +17,22 @@ def initialize_firebase():
         try:
             cred_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
             if cred_path and os.path.exists(cred_path):
+                print(f"Loading service account from: {cred_path}")
                 cred = credentials.Certificate(cred_path)
-                firebase_admin.initialize_app(cred)
+                options = {
+                    'projectId': 'taajirah'
+                }
+                firebase_admin.initialize_app(cred, options)
                 print("Firebase initialized with service account key")
+                # Test the initialization
+                try:
+                    auth.get_user('test')
+                except auth.UserNotFoundError:
+                    print("Firebase Auth is working correctly")
+                except Exception as e:
+                    print(f"Firebase Auth test failed: {e}")
             else:
+                print("No service account file found")
                 # Use default credentials (for Cloud Run)
                 cred = credentials.ApplicationDefault()
                 firebase_admin.initialize_app(cred)
@@ -34,11 +46,29 @@ def initialize_firebase():
 # Verify Firebase ID token
 def verify_firebase_token(token: str):
     try:
-        decoded_token = auth.verify_id_token(token)
-        return decoded_token
+        # Add more debug logging
+        print(f"Verifying token starting with: {token[:50]}...")
+        
+        # Try to verify the token
+        try:
+            decoded_token = auth.verify_id_token(token, check_revoked=True)
+            print(f"Token verified successfully for user: {decoded_token.get('email')}")
+            return decoded_token
+        except auth.RevokedIdTokenError:
+            print("Token has been revoked")
+            raise HTTPException(status_code=401, detail="Token has been revoked")
+        except auth.ExpiredIdTokenError:
+            print("Token has expired")
+            raise HTTPException(status_code=401, detail="Token has expired")
+        except auth.InvalidIdTokenError as e:
+            print(f"Invalid token: {e}")
+            raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
+        except Exception as e:
+            print(f"Unexpected error during token verification: {e}")
+            raise HTTPException(status_code=401, detail=f"Token verification failed: {e}")
     except Exception as e:
         logger.warning(f"Token verification failed: {e}")
-        raise HTTPException(status_code=401, detail="Invalid authentication token")
+        raise HTTPException(status_code=401, detail=f"Invalid authentication token: {str(e)}")
 
 # Initialize Firebase and Logger
 logger = logging.getLogger(__name__)
@@ -49,7 +79,7 @@ firebase_initialized = initialize_firebase()
 LOCAL_DEV_TOKEN = os.environ.get('LOCAL_DEV_TOKEN')
 
 # Get the directory where main.py is located
-AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
+AGENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "drop_agent")
 
 # Configure session storage based on environment
 REASONING_ENGINE_ID = os.environ.get('REASONING_ENGINE_ID')
@@ -57,8 +87,8 @@ if REASONING_ENGINE_ID and os.environ.get('ENV') == 'production':
     SESSION_DB_URL = f"agentengine://{REASONING_ENGINE_ID}"
     logger.info(f"Using Vertex AI session storage with engine {REASONING_ENGINE_ID}")
 else:
-    SESSION_DB_URL = "sqlite:///./sessions.db"
-    logger.info("Using SQLite session storage for development")
+    SESSION_DB_URL = "memory://"  # Use in-memory session storage for development
+    logger.info("Using in-memory session storage for development")
 
 # CORS allowed origins - including frontend domains
 ALLOWED_ORIGINS = [
@@ -67,16 +97,16 @@ ALLOWED_ORIGINS = [
     "https://drop-agent-service-855515190257.us-central1.run.app",  # Cloud Run service
 ]
 
-# Set web=False to use our custom Firebase authentication instead of ADK's auth
-SERVE_WEB_INTERFACE = False
+# Set web=True to use ADK's built-in session management
+SERVE_WEB_INTERFACE = True
 
 # Call the function to get the FastAPI app instance
 app = get_fast_api_app(
     agents_dir=AGENT_DIR,
     session_service_uri=SESSION_DB_URL,
     allow_origins=ALLOWED_ORIGINS,
-    web=SERVE_WEB_INTERFACE,
-)
+    web=SERVE_WEB_INTERFACE
+)  # Remove the disable_endpoints parameter since we don't need video status endpoint
 
 # Add CORS middleware before Firebase middleware
 app.add_middleware(

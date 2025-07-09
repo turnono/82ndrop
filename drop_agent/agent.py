@@ -1,7 +1,7 @@
 from google.adk import Agent
-from google.adk.tools.agent_tool import AgentTool
-from .prompts import PROMPT
-from .sub_agents import guide_agent, search_agent, prompt_writer_agent
+from .sub_agents.guide.agent import guide_agent
+from .sub_agents.search.tools.search_tool import SearchEnhancementTool
+from .prompts import ROOT_PROMPT
 from .callbacks import (
     before_agent_callback,
     after_agent_callback,
@@ -11,30 +11,18 @@ from .callbacks import (
     after_tool_callback,
 )
 
-# Create the authenticated root agent - Hub-and-Spoke Pattern (following proven pattern)
+# Create the root agent focused on prompt generation
 root_agent = Agent(
-    name="task_master_agent",
+    name="drop_agent",
     model="gemini-2.0-flash",
-    instruction=PROMPT,
-    
-    output_key="video_script_response",
-    # Re-enabling callbacks for production monitoring and analytics
+    instruction=ROOT_PROMPT,
+    sub_agents=[guide_agent],  # Only use guide_agent as sub-agent
+    tools=[SearchEnhancementTool()],  # Use search enhancement tool
+    output_key="prompt_response",
     before_agent_callback=before_agent_callback,
     after_agent_callback=after_agent_callback,
     before_model_callback=before_model_callback,
     after_model_callback=after_model_callback,
     before_tool_callback=before_tool_callback,
-    after_tool_callback=after_tool_callback,
-    
-    # Use sub_agents for agents that can be transferred to
-    sub_agents=[guide_agent, prompt_writer_agent],  # search_agent is used as a tool
-    
-    # Use tools for utility agents (following proven pattern)
-    tools=[
-        AgentTool(
-            agent=search_agent,
-            name="search_agent",  # Explicit name for clarity
-            description="Enhances content with current TikTok trends and hashtags"
-        )
-    ],
+    after_tool_callback=after_tool_callback
 ) 

@@ -1,7 +1,7 @@
 from google.adk import Agent
 from google.adk.tools import google_search
-from .prompt import DESCRIPTION, INSTRUCTION
-from ...callbacks import (
+from drop_agent.sub_agents.search.prompt import DESCRIPTION, INSTRUCTION
+from drop_agent.callbacks import (
     before_agent_callback,
     after_agent_callback,
     before_model_callback,
@@ -15,7 +15,7 @@ search_agent = Agent(
     model="gemini-2.0-flash",
     description=DESCRIPTION,
     instruction=INSTRUCTION,
-    tools=[google_search],
+    tools=[google_search],  # Only use the google_search tool
     output_key="search_enhancement_response",
     before_agent_callback=before_agent_callback,
     after_agent_callback=after_agent_callback,
