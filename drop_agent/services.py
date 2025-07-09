@@ -13,7 +13,13 @@ def get_runner():
     """Initialize and return the ADK Runner."""
     global _runner
     if _runner is None:
-        session_service = InMemorySessionService()
+        # Initialize session service with app name and initial state
+        initial_state = {
+            "app:language": "en",
+            "app:video_format": "9:16",
+            "app:voice_style": "South African"
+        }
+        session_service = InMemorySessionService()  # No app_name parameter needed
         memory_service = InMemoryMemoryService()
 
         from .agent import root_agent

@@ -27,8 +27,14 @@ root_agent = Agent(
     after_tool_callback=after_tool_callback,
     
     # Use sub_agents for agents that can be transferred to
-    sub_agents=[guide_agent, prompt_writer_agent],  # Removed search_agent since it's a tool
+    sub_agents=[guide_agent, prompt_writer_agent],  # search_agent is used as a tool
     
     # Use tools for utility agents (following proven pattern)
-    tools=[AgentTool(agent=search_agent)],
+    tools=[
+        AgentTool(
+            agent=search_agent,
+            name="search_agent",  # Explicit name for clarity
+            description="Enhances content with current TikTok trends and hashtags"
+        )
+    ],
 ) 
