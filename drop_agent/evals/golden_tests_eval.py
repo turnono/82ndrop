@@ -103,7 +103,7 @@ async def test_prompt_structures():
     
     try:
         from drop_agent.prompts import PROMPT
-        from drop_agent.sub_agents.guide.prompt import INSTRUCTION as GUIDE_INSTRUCTION
+        from drop_agent.sub_agents.guide.prompt import GUIDE_PROMPT as GUIDE_INSTRUCTION
         from drop_agent.sub_agents.search.prompt import INSTRUCTION as SEARCH_INSTRUCTION
         from drop_agent.sub_agents.prompt_writer.prompt import INSTRUCTION as PROMPT_WRITER_INSTRUCTION
         

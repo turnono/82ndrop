@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uvicorn
 from google.adk.cli.fast_api import get_fast_api_app
+from fastapi.middleware.cors import CORSMiddleware
 
 # Initialize Firebase Admin SDK
 def initialize_firebase():
@@ -49,23 +50,42 @@ LOCAL_DEV_TOKEN = os.environ.get('LOCAL_DEV_TOKEN')
 
 # Get the directory where main.py is located
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Example session DB URL (e.g., SQLite)
-SESSION_DB_URL = "sqlite:///./sessions.db"
+
+# Configure session storage based on environment
+REASONING_ENGINE_ID = os.environ.get('REASONING_ENGINE_ID')
+if REASONING_ENGINE_ID and os.environ.get('ENV') == 'production':
+    SESSION_DB_URL = f"agentengine://{REASONING_ENGINE_ID}"
+    logger.info(f"Using Vertex AI session storage with engine {REASONING_ENGINE_ID}")
+else:
+    SESSION_DB_URL = "sqlite:///./sessions.db"
+    logger.info("Using SQLite session storage for development")
+
 # CORS allowed origins - including frontend domains
 ALLOWED_ORIGINS = [
     "http://localhost:4200",  # Angular dev server
-    "https://82ndrop.web.app",       # Production frontend
+    "https://82ndrop.web.app",  # Production frontend
+    "https://drop-agent-service-855515190257.us-central1.run.app",  # Cloud Run service
 ]
+
 # Set web=False to use our custom Firebase authentication instead of ADK's auth
 SERVE_WEB_INTERFACE = False
 
 # Call the function to get the FastAPI app instance
-# Ensure the agent directory name ('drop_agent') matches your agent folder
 app = get_fast_api_app(
     agents_dir=AGENT_DIR,
     session_service_uri=SESSION_DB_URL,
     allow_origins=ALLOWED_ORIGINS,
     web=SERVE_WEB_INTERFACE,
+)
+
+# Add CORS middleware before Firebase middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    max_age=3600,
 )
 
 # Add Firebase authentication middleware
@@ -200,7 +220,8 @@ async def get_user_profile(request: Request):
 #     return {"Hello": "World"}
 
 if __name__ == "__main__":
-    # Use port 8000 to avoid conflict with Jenkins on 8080
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
     logging.basicConfig(level=logging.INFO)
-    logger.info("Starting 82ndrop agent server...")
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000))) 
+    logger.info(f"Starting 82ndrop agent server on port {port}...")
+    uvicorn.run(app, host="0.0.0.0", port=port) 

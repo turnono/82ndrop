@@ -2,7 +2,7 @@
 
 from google.adk import Agent
 from google.adk.tools.agent_tool import AgentTool
-from .prompt import PROMPT_WRITER_PROMPT
+from .prompt import INSTRUCTION
 from ..search import search_agent
 from ...callbacks import (
     before_agent_callback,
@@ -17,7 +17,7 @@ prompt_writer_agent = Agent(
     name="prompt_writer_agent",
     model="gemini-2.0-flash",
     description="Final step specialist who creates Master Prompt Template outputs for vertical video generation using natural language format.",
-    instruction=PROMPT_WRITER_PROMPT,
+    instruction=INSTRUCTION,
     tools=[AgentTool(agent=search_agent)],
     output_key="video_prompts_response",
     # Re-enabling callbacks for production monitoring and analytics

@@ -15,8 +15,7 @@ from .callbacks import (
 root_agent = Agent(
     name="task_master_agent",
     model="gemini-2.0-flash",
-    instruction=f"""You are the 82ndrop task master and orchestrator. 
-{PROMPT}""",
+    instruction=PROMPT,
     
     output_key="video_script_response",
     # Re-enabling callbacks for production monitoring and analytics
@@ -28,7 +27,7 @@ root_agent = Agent(
     after_tool_callback=after_tool_callback,
     
     # Use sub_agents for agents that can be transferred to
-    sub_agents=[guide_agent, prompt_writer_agent],
+    sub_agents=[guide_agent, prompt_writer_agent],  # Removed search_agent since it's a tool
     
     # Use tools for utility agents (following proven pattern)
     tools=[AgentTool(agent=search_agent)],
