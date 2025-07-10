@@ -1,4 +1,6 @@
-google_adk
+uvicorn[standard]
+fastapi
 firebase-admin
-gunicorn
-# Add any other dependencies your agent needs
+google-adk
+httptools
+httpx

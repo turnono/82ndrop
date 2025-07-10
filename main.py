@@ -3,12 +3,14 @@ import logging
 from logging_config import APILogger
 import firebase_admin
 from firebase_admin import credentials, auth
-from fastapi import Request, HTTPException
+from fastapi import Request, HTTPException, FastAPI, Depends
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uvicorn
 from google.adk.cli.fast_api import get_fast_api_app
 from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Initialize Firebase Admin SDK
 def initialize_firebase():
@@ -19,239 +21,85 @@ def initialize_firebase():
             if cred_path and os.path.exists(cred_path):
                 print(f"Loading service account from: {cred_path}")
                 cred = credentials.Certificate(cred_path)
-                options = {
-                    'projectId': 'taajirah'
-                }
-                firebase_admin.initialize_app(cred, options)
-                print("Firebase initialized with service account key")
-                # Test the initialization
-                try:
-                    auth.get_user('test')
-                except auth.UserNotFoundError:
-                    print("Firebase Auth is working correctly")
-                except Exception as e:
-                    print(f"Firebase Auth test failed: {e}")
-            else:
-                print("No service account file found")
-                # Use default credentials (for Cloud Run)
-                cred = credentials.ApplicationDefault()
                 firebase_admin.initialize_app(cred)
+                print("Firebase initialized with service account")
+            else:
+                # Use application default credentials
+                firebase_admin.initialize_app()
                 print("Firebase initialized with application default credentials")
         except Exception as e:
-            print(f"Warning: Failed to initialize Firebase Admin SDK: {e}")
-            print("Authentication will be disabled")
-            return False
-    return True
+            print(f"Error initializing Firebase: {e}")
+            # Initialize without credentials for development
+            firebase_admin.initialize_app()
+            print("Firebase initialized without credentials")
 
-# Verify Firebase ID token
-def verify_firebase_token(token: str):
-    try:
-        # Add more debug logging
-        print(f"Verifying token starting with: {token[:50]}...")
+# Initialize Firebase
+initialize_firebase()
+
+# Firebase authentication middleware
+class FirebaseAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Skip authentication for health check and OPTIONS requests
+        if request.url.path == "/health" or request.method == "OPTIONS":
+            return await call_next(request)
         
-        # Try to verify the token
+        # Check for Authorization header
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return JSONResponse(status_code=401, content={"detail": "Missing or invalid Authorization header"})
+        
         try:
-            decoded_token = auth.verify_id_token(token, check_revoked=True)
-            print(f"Token verified successfully for user: {decoded_token.get('email')}")
-            return decoded_token
-        except auth.RevokedIdTokenError:
-            print("Token has been revoked")
-            raise HTTPException(status_code=401, detail="Token has been revoked")
-        except auth.ExpiredIdTokenError:
-            print("Token has expired")
-            raise HTTPException(status_code=401, detail="Token has expired")
-        except auth.InvalidIdTokenError as e:
-            print(f"Invalid token: {e}")
-            raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
+            # Extract and verify the token
+            token = auth_header.split("Bearer ")[1]
+            decoded_token = auth.verify_id_token(token)
+            
+            # Check if user has agent access
+            if not decoded_token.get('agent_access'):
+                return JSONResponse(status_code=403, content={"detail": "User does not have agent access"})
+            
+            # Add user info to request state
+            request.state.user = decoded_token
+            
         except Exception as e:
-            print(f"Unexpected error during token verification: {e}")
-            raise HTTPException(status_code=401, detail=f"Token verification failed: {e}")
-    except Exception as e:
-        logger.warning(f"Token verification failed: {e}")
-        raise HTTPException(status_code=401, detail=f"Invalid authentication token: {str(e)}")
-
-# Initialize Firebase and Logger
-logger = logging.getLogger(__name__)
-api_logger = APILogger()
-firebase_initialized = initialize_firebase()
-
-# Local development token for testing (bypass Firebase auth)
-LOCAL_DEV_TOKEN = os.environ.get('LOCAL_DEV_TOKEN')
+            print(f"Firebase token verification failed: {e}")
+            return JSONResponse(status_code=401, content={"detail": "Invalid authentication token"})
+        
+        return await call_next(request)
 
 # Get the directory where main.py is located
-AGENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "drop_agent")
+AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Configure session storage based on environment
-REASONING_ENGINE_ID = os.environ.get('REASONING_ENGINE_ID')
-if REASONING_ENGINE_ID and os.environ.get('ENV') == 'production':
-    SESSION_DB_URL = f"agentengine://{REASONING_ENGINE_ID}"
-    logger.info(f"Using Vertex AI session storage with engine {REASONING_ENGINE_ID}")
-else:
-    SESSION_DB_URL = "memory://"  # Use in-memory session storage for development
-    logger.info("Using in-memory session storage for development")
+# Example allowed origins for CORS
+ALLOWED_ORIGINS = ["http://localhost", "http://localhost:8080", "*"]
 
-# CORS allowed origins - including frontend domains
-ALLOWED_ORIGINS = [
-    "http://localhost:4200",  # Angular dev server
-    "https://82ndrop.web.app",  # Production frontend
-    "https://drop-agent-service-855515190257.us-central1.run.app",  # Cloud Run service
-]
-
-# Set web=True to use ADK's built-in session management
+# Set web=True if you intend to serve a web interface, False otherwise
 SERVE_WEB_INTERFACE = True
 
 # Call the function to get the FastAPI app instance
-app = get_fast_api_app(
-    agents_dir=AGENT_DIR,
-    session_service_uri=SESSION_DB_URL,
+# Ensure the agent directory name ('drop_agent') matches your agent folder
+app: FastAPI = get_fast_api_app(
+    agents_dir="drop_agent",
     allow_origins=ALLOWED_ORIGINS,
-    web=SERVE_WEB_INTERFACE
-)  # Remove the disable_endpoints parameter since we don't need video status endpoint
+    web=SERVE_WEB_INTERFACE,
+)
 
-# Add CORS middleware before Firebase middleware
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    max_age=3600,
 )
 
 # Add Firebase authentication middleware
-@app.middleware("http")
-async def firebase_auth_middleware(request: Request, call_next):
-    # Allow CORS preflight requests to pass through
-    if request.method == "OPTIONS":
-        return await call_next(request)
-
-    # Skip authentication for health checks and static files
-    if request.url.path in ["/", "/health", "/docs", "/openapi.json"] or request.url.path.startswith("/static"):
-        return await call_next(request)
-    
-    # Check for Authorization header
-    auth_header = request.headers.get("Authorization")
-    if not auth_header:
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Authorization header required"}
-        )
-    
-    # Extract token from Bearer header
-    if not auth_header.startswith("Bearer "):
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Invalid authorization header format"}
-        )
-    
-    token = auth_header.split(" ")[1]
-    
-    # Local development bypass - allow using the actual Firebase token directly
-    if LOCAL_DEV_TOKEN and LOCAL_DEV_TOKEN == "firebase":
-        logger.info("Using local development mode with Firebase token")
-        # Use Firebase token verification even in local mode
-        try:
-            decoded_token = verify_firebase_token(token)
-            request.state.user = decoded_token
-            request.state.user_id = decoded_token.get('uid')
-            request.state.user_email = decoded_token.get('email')
-            return await call_next(request)
-        except Exception as e:
-            logger.error(f"Firebase token verification failed in local mode: {e}")
-            return JSONResponse(
-                status_code=401,
-                content={"detail": f"Firebase authentication failed: {e}"}
-            )
-    
-    # Skip authentication if Firebase is not initialized (for local dev)
-    if not firebase_initialized:
-        logger.warning("Firebase not initialized, skipping authentication")
-        return await call_next(request)
-    
-    # Verify Firebase token
-    try:
-        decoded_token = verify_firebase_token(token)
-        # Add user info to request state for use in endpoints
-        request.state.user = decoded_token
-        request.state.user_id = decoded_token.get('uid')
-        request.state.user_email = decoded_token.get('email')
-        api_logger.log_authentication(
-            user_id=decoded_token.get('uid'),
-            email=decoded_token.get('email'),
-            success=True
-        )
-    except HTTPException as e:
-        api_logger.log_authentication(
-            user_id=None,
-            email=None,
-            success=False,
-            reason=e.detail
-        )
-        return JSONResponse(
-            status_code=e.status_code,
-            content={"detail": e.detail}
-        )
-    except Exception as e:
-        logger.error(f"Unexpected error during token verification: {e}")
-        api_logger.log_authentication(
-            user_id=None,
-            email=None,
-            success=False,
-            reason=str(e)
-        )
-        return JSONResponse(
-            status_code=401,
-            content={"detail": "Authentication failed"}
-        )
-    
-    return await call_next(request)
+app.add_middleware(FirebaseAuthMiddleware)
 
 # Health check endpoint (no auth required)
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "healthy",
-        "firebase_initialized": firebase_initialized,
-        "service": "82ndrop-agent"
-    }
-
-# User profile endpoint
-@app.get("/user/profile")
-async def get_user_profile(request: Request):
-    # Get user info from middleware
-    user_token = getattr(request.state, 'user', None)
-    if not user_token:
-        # This case should ideally not be reached if middleware is effective
-        raise HTTPException(status_code=401, detail="User not authenticated")
-    
-    # Extract user information and custom claims
-    uid = user_token.get('uid')
-    email = user_token.get('email')
-    name = user_token.get('name', user_token.get('display_name'))
-    
-    # Get custom claims
-    agent_access = user_token.get('agent_access', False)
-    access_level = user_token.get('access_level', 'none')
-    agent_permissions = user_token.get('agent_permissions', {})
-    
-    return {
-        "uid": uid,
-        "email": email,
-        "display_name": name,
-        "agent_access": agent_access,
-        "access_level": access_level,
-        "permissions": agent_permissions
-    }
-
-# You can add more FastAPI routes or configurations below if needed
-# Example:
-# @app.get("/hello")
-# async def read_root():
-#     return {"Hello": "World"}
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    logging.basicConfig(level=logging.INFO)
-    logger.info(f"Starting 82ndrop agent server on port {port}...")
-    uvicorn.run(app, host="0.0.0.0", port=port) 
+    # Use the PORT environment variable provided by Cloud Run, defaulting to 8080
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080))) 
