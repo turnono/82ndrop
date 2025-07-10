@@ -1,3 +1,11 @@
 #!/bin/bash
 echo "PORT is set to: $PORT"
-exec gunicorn --bind :$PORT --workers 1 --worker-class uvicorn.workers.UvicornWorker --timeout 0 main:app 
+exec uvicorn main:app \
+    --host 0.0.0.0 \
+    --port $PORT \
+    --proxy-headers \
+    --forwarded-allow-ips="*" \
+    --server-header \
+    --date-header \
+    --timeout-keep-alive 120 \
+    --http h11 
