@@ -4,6 +4,9 @@
 # "Allow unauthenticated invocations to [your-service-name] (y/N)?"
 # Answer: N (or press Enter) to REQUIRE authentication
 # This enables ADK's built-in authentication at the Cloud Run level
+#
+# CORS FIX: The main.py includes a custom OPTIONS handler to fix ADK 1.5.0 CORS preflight bug
+# This allows the frontend to make authenticated requests to session endpoints
 
 include drop_agent/.env
 
@@ -23,6 +26,7 @@ deploy:
 
 deploy-gcloud:
 	@echo "[Deploy with gcloud] Deploying agent with Firebase authentication using gcloud run deploy..."
+	@echo "✅ Includes CORS fix for frontend compatibility"
 	@if [ -z "${GOOGLE_CLOUD_PROJECT}" ]; then \
 		echo "❌ Error: GOOGLE_CLOUD_PROJECT environment variable is not set."; \
 		echo "Set it in your drop_agent/.env file"; \
@@ -61,6 +65,7 @@ FIREBASE_PROJECT_ID=${GOOGLE_CLOUD_PROJECT}"
 
 deploy-production:
 	@echo "[Deploy Production] Deploying production service (FIREBASE AUTH REQUIRED)..."
+	@echo "✅ Includes CORS fix for frontend compatibility"
 	@if [ -z "${GOOGLE_CLOUD_PROJECT}" ]; then \
 		echo "❌ Error: GOOGLE_CLOUD_PROJECT environment variable is not set."; \
 		echo "Set it in your drop_agent/.env file"; \
@@ -142,3 +147,7 @@ help:
 	@echo ""
 	@echo "AUTHENTICATION NOTE:"
 	@echo "When deploying, answer 'N' to 'Allow unauthenticated invocations?' to enable authentication"
+	@echo ""
+	@echo "CORS FIX:"
+	@echo "Both deploy-gcloud and deploy-production include a CORS fix for ADK 1.5.0 preflight bug"
+	@echo "This allows the frontend to make authenticated requests to session endpoints"
