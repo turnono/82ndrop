@@ -196,6 +196,30 @@ The application is automatically deployed to:
 - **Frontend**: https://82ndrop.web.app
 - **Backend**: https://drop-agent-service-855515190257.us-central1.run.app
 
+#### Deployment Commands
+
+**For Firebase Authentication (Recommended):**
+
+```bash
+# Development/Testing
+make deploy-gcloud
+
+# Production
+make deploy-production
+```
+
+**For ADK Authentication (Not recommended for this setup):**
+
+```bash
+make deploy
+```
+
+> **⚠️ Important**: Use `make deploy-gcloud` or `make deploy-production` for Firebase authentication. The `make deploy` command uses ADK authentication which is not compatible with our Firebase setup.
+
+#### CORS Fix
+
+The backend includes a custom CORS fix for ADK 1.5.0 compatibility. See [CORS Fix Documentation](ai_docs/CORS_FIX_DOCUMENTATION.md) for details.
+
 ## 📊 System Status
 
 ✅ **Production Ready**
