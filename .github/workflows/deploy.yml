@@ -3,8 +3,22 @@ name: Deploy to Production
 on:
   push:
     branches: [master]
+    paths:
+      - "drop_agent/**"
+      - "main.py"
+      - "requirements.txt"
+      - "frontend/**"
+      - "Dockerfile"
+      - ".github/workflows/deploy.yml"
   pull_request:
     branches: [master]
+    paths:
+      - "drop_agent/**"
+      - "main.py"
+      - "requirements.txt"
+      - "frontend/**"
+      - "Dockerfile"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
 env:
