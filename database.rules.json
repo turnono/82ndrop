@@ -9,10 +9,28 @@
         }
       }
     },
+    "staging_sessions": {
+      "$userId": {
+        ".read": "auth != null && auth.uid == $userId",
+        ".write": "auth != null && auth.uid == $userId",
+        "$sessionId": {
+          ".validate": "newData.hasChildren(['title', 'userId', 'createdAt', 'updatedAt', 'messageCount'])"
+        }
+      }
+    },
     "messages": {
       "$sessionId": {
         ".read": "auth != null && root.child('sessions').child(auth.uid).child($sessionId).exists()",
         ".write": "auth != null && root.child('sessions').child(auth.uid).child($sessionId).exists()",
+        "$messageId": {
+          ".validate": "newData.hasChildren(['type', 'content', 'timestamp', 'sessionId'])"
+        }
+      }
+    },
+    "staging_messages": {
+      "$sessionId": {
+        ".read": "auth != null && (root.child('sessions').child(auth.uid).child($sessionId).exists() || root.child('staging_sessions').child(auth.uid).child($sessionId).exists())",
+        ".write": "auth != null && (root.child('sessions').child(auth.uid).child($sessionId).exists() || root.child('staging_sessions').child(auth.uid).child($sessionId).exists())",
         "$messageId": {
           ".validate": "newData.hasChildren(['type', 'content', 'timestamp', 'sessionId'])"
         }
