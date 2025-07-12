@@ -682,18 +682,62 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   onApiKeyContinue() {
     this.isGeneratingVideo = true;
-    // Simulate video generation (replace with backend call later)
-    setTimeout(() => {
+
+    // Check if we're in development mode
+    if (
+      typeof window !== 'undefined' &&
+      window.location.hostname === 'localhost'
+    ) {
+      // Development simulation - only run in localhost
+      console.log('Running video generation simulation in development mode');
+      setTimeout(() => {
+        this.isGeneratingVideo = false;
+        this.generatedVideoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4'; // placeholder
+      }, 2000);
+    } else {
+      // Production mode - TODO: Implement actual backend integration
+      console.log('Video generation backend integration not yet implemented');
       this.isGeneratingVideo = false;
-      this.generatedVideoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4'; // placeholder
-    }, 2000);
+      // TODO: Replace with actual backend call
+      // this.agentService.generateVideo(this.veoApiKey).subscribe({
+      //   next: (response) => {
+      //     this.isGeneratingVideo = false;
+      //     this.generatedVideoUrl = response.videoUrl;
+      //   },
+      //   error: (error) => {
+      //     console.error('Error generating video:', error);
+      //     this.isGeneratingVideo = false;
+      //     // Handle error appropriately
+      //   }
+      // });
+    }
   }
 
   resetVideoGeneration() {
-    this.showGeneratePrompt = false;
-    this.showApiKeyInput = false;
-    this.veoApiKey = '';
-    this.isGeneratingVideo = false;
-    this.generatedVideoUrl = null;
+    try {
+      // Cancel any ongoing video generation processes
+      if (this.isGeneratingVideo) {
+        console.log('Cancelling ongoing video generation...');
+        // TODO: Implement actual cancellation logic when backend is ready
+        // this.agentService.cancelVideoGeneration().subscribe({
+        //   next: () => console.log('Video generation cancelled successfully'),
+        //   error: (error) => console.error('Error cancelling video generation:', error)
+        // });
+      }
+
+      // Reset state variables
+      this.showGeneratePrompt = false;
+      this.showApiKeyInput = false;
+      this.veoApiKey = '';
+      this.isGeneratingVideo = false;
+      this.generatedVideoUrl = null;
+
+      console.log('Video generation state reset successfully');
+    } catch (error) {
+      console.error('Error during video generation reset:', error);
+      // Ensure critical state is reset even if there's an error
+      this.isGeneratingVideo = false;
+      this.generatedVideoUrl = null;
+    }
   }
 }
