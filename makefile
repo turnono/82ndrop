@@ -8,6 +8,10 @@
 # CORS FIX: The main.py includes a custom OPTIONS handler to fix ADK 1.5.0 CORS preflight bug
 # This allows the frontend to make authenticated requests to session endpoints
 
+# ⚠️ WARNING: All deployments must be performed via GitHub Actions workflows ONLY.
+# Manual deployments using 'make deploy', 'make deploy-gcloud', or 'make deploy-production' are STRICTLY PROHIBITED.
+# Any manual deployment will be considered a violation of project policy.
+
 include drop_agent/.env
 
 install:

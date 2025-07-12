@@ -1,0 +1,83 @@
+name: Deploy to Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy to"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - testing
+
+env:
+  GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
+  GOOGLE_CLOUD_LOCATION: ${{ secrets.GOOGLE_CLOUD_LOCATION }}
+  GOOGLE_GENAI_USE_VERTEXAI: ${{ secrets.GOOGLE_GENAI_USE_VERTEXAI }}
+  REASONING_ENGINE_ID: ${{ secrets.REASONING_ENGINE_ID }}
+  ENV: ${{ github.event.inputs.environment }}
+
+jobs:
+  deploy-staging-backend:
+    name: Deploy Staging Backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
+          service_account_key: ${{ secrets.GOOGLE_CLOUD_SA_KEY }}
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Deploy Staging Backend
+        run: |
+          echo "🚀 Deploying staging backend to Cloud Run..."
+          gcloud run deploy drop-agent-staging \
+            --source . \
+            --region ${{ secrets.GOOGLE_CLOUD_LOCATION }} \
+            --allow-unauthenticated \
+            --port 8000 \
+            --service-account ${{ secrets.GOOGLE_CLOUD_PROJECT }}@appspot.gserviceaccount.com \
+            --set-env-vars="GOOGLE_CLOUD_PROJECT=${{ secrets.GOOGLE_CLOUD_PROJECT }},\
+          GOOGLE_CLOUD_LOCATION=${{ secrets.GOOGLE_CLOUD_LOCATION }},\
+          GOOGLE_GENAI_USE_VERTEXAI=${{ secrets.GOOGLE_GENAI_USE_VERTEXAI }},\
+          REASONING_ENGINE_ID=${{ secrets.REASONING_ENGINE_ID }},\
+          ENV=${{ env.ENV }},\
+          FIREBASE_PROJECT_ID=${{ secrets.GOOGLE_CLOUD_PROJECT }}"
+
+      - name: Verify staging deployment
+        run: |
+          echo "✅ Verifying staging deployment..."
+          sleep 30
+          curl -f https://drop-agent-staging-${{ secrets.GOOGLE_CLOUD_PROJECT }}.${{ secrets.GOOGLE_CLOUD_LOCATION }}.run.app/ || exit 1
+
+  notify-staging-success:
+    name: Notify Staging Success
+    runs-on: ubuntu-latest
+    needs: deploy-staging-backend
+    if: always()
+    steps:
+      - name: Staging Deployment Status
+        run: |
+          if [ "${{ needs.deploy-staging-backend.result }}" == "success" ]; then
+            echo "✅ Staging deployment successful!"
+            echo "🔧 Staging Backend: https://drop-agent-staging-${{ secrets.GOOGLE_CLOUD_PROJECT }}.${{ secrets.GOOGLE_CLOUD_LOCATION }}.run.app"
+            echo "📊 Environment: ${{ env.ENV }}"
+          else
+            echo "❌ Staging deployment failed!"
+            echo "Backend status: ${{ needs.deploy-staging-backend.result }}"
+            exit 1
+          fi

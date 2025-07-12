@@ -1,0 +1,10 @@
+# Deployment Policy Rule
+
+All deployments (production and staging) **must** be performed via GitHub Actions workflows only. Manual deployments using `make deploy`, `make deploy-gcloud`, or `make deploy-production` are **strictly prohibited** and will be considered a violation of project policy.
+
+For more details, see [README.md](mdc:README.md) and [makefile](mdc:makefile).
+description:
+globs:
+alwaysApply: false
+
+---
