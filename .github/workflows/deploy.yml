@@ -54,7 +54,7 @@ jobs:
       - name: Verify backend deployment
         run: |
           echo "✅ Verifying backend deployment..."
-          sleep 30
+          sleep 60
           curl -f https://drop-agent-service-${{ secrets.GOOGLE_CLOUD_PROJECT }}.${{ secrets.GOOGLE_CLOUD_LOCATION }}.run.app/health || exit 1
 
   deploy-frontend:
