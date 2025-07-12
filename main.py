@@ -61,6 +61,7 @@ SERVE_WEB_INTERFACE = False
 # Define proper CORS origins
 ALLOWED_ORIGINS = [
     "https://82ndrop.web.app",
+    "https://staging.82ndrop.web.app",
     "http://localhost:4200",
     "http://localhost:8080",
     "http://localhost"
