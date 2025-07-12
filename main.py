@@ -118,19 +118,19 @@ async def generate_video(request: Request):
                 detail="Invalid service account credentials provided"
             )
 
-        # Get environment and determine video bucket
-        env = os.getenv('ENV', 'development')
-        project_id = os.getenv('GOOGLE_CLOUD_PROJECT')
+        # Get environment and project settings
+        project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+        env = os.getenv("ENV", "development")
+        
         if not project_id:
-            logging.error("GOOGLE_CLOUD_PROJECT environment variable is not set")
             raise HTTPException(
                 status_code=500,
-                detail="Project configuration is missing"
+                detail="GOOGLE_CLOUD_PROJECT environment variable is not set"
             )
 
-        # Use different bucket names based on environment
-        video_bucket = f"82ndrop-videos-{project_id}" if env == "production" else f"82ndrop-videos-staging-{project_id}"
-        logging.info(f"Using video bucket: {video_bucket} for environment: {env}")
+        # Use the same bucket naming convention as deploy.yml
+        video_bucket = f"82ndrop-videos{'-staging' if env != 'production' else ''}-{project_id}"
+        output_gcs_uri = f"gs://{video_bucket}/users/{user_id}/sessions/{session_id}/"
 
         # Get the Veo3 model
         model = GenerativeModel("veo-3.0-generate-preview")
@@ -141,7 +141,7 @@ async def generate_video(request: Request):
             aspect_ratio="9:16",
             duration=8,
             negative_prompt="blurry, low quality, distorted, unrealistic",
-            output_gcs_uri=f"gs://{video_bucket}/users/{user_id}/sessions/{session_id}/"
+            output_gcs_uri=output_gcs_uri
         )
 
         # Log the operation details
