@@ -422,6 +422,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   isLoading = false;
   private shouldScrollToBottom = false;
 
+  // Add state for VEO3 video generation flow
+  showGeneratePrompt = false;
+  showApiKeyInput = false;
+  veoApiKey = '';
+  isGeneratingVideo = false;
+  generatedVideoUrl: string | null = null;
+
   private subscriptions: Subscription[] = [];
 
   constructor(
@@ -662,5 +669,31 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         </div>`;
       }) // JSON blocks with copy button
       .replace(/`(.*?)`/g, '<code>$1</code>'); // Inline code
+  }
+
+  // Call this after displaying the Master Prompt
+  showGenerateVideoPrompt() {
+    this.showGeneratePrompt = true;
+  }
+
+  onGenerateVideoClick() {
+    this.showApiKeyInput = true;
+  }
+
+  onApiKeyContinue() {
+    this.isGeneratingVideo = true;
+    // Simulate video generation (replace with backend call later)
+    setTimeout(() => {
+      this.isGeneratingVideo = false;
+      this.generatedVideoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4'; // placeholder
+    }, 2000);
+  }
+
+  resetVideoGeneration() {
+    this.showGeneratePrompt = false;
+    this.showApiKeyInput = false;
+    this.veoApiKey = '';
+    this.isGeneratingVideo = false;
+    this.generatedVideoUrl = null;
   }
 }
