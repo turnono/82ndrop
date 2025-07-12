@@ -10,15 +10,6 @@ on:
       - "frontend/**"
       - "Dockerfile"
       - ".github/workflows/deploy-staging.yml"
-  pull_request:
-    branches: [staging]
-    paths:
-      - "drop_agent/**"
-      - "main.py"
-      - "requirements.txt"
-      - "frontend/**"
-      - "Dockerfile"
-      - ".github/workflows/deploy-staging.yml"
   workflow_dispatch:
 
 env:
@@ -100,9 +91,11 @@ jobs:
           npm ci
 
       - name: Build frontend
+        env:
+          STAGING_API_URL: https://drop-agent-staging-${{ secrets.GOOGLE_CLOUD_PROJECT }}.${{ secrets.GOOGLE_CLOUD_LOCATION }}.run.app
         run: |
           cd frontend
-          npm run build -- --configuration=production
+          npm run build:staging
 
       - name: Deploy frontend to Firebase Hosting (Staging)
         run: |

@@ -1,6 +1,8 @@
 export const environment = {
   production: false,
-  apiUrl: 'https://drop-agent-staging-855515190257.us-central1.run.app', // Staging backend
+  apiUrl:
+    process.env['STAGING_API_URL'] ||
+    'https://drop-agent-staging-855515190257.us-central1.run.app', // Staging backend
   paystack: {
     publicKey: 'pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
     secretKey: 'sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
