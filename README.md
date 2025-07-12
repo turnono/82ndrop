@@ -249,3 +249,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Powered by Gemini 2.0 Flash
 - Master Prompt Template strategy implementation
 - Vertical-first mobile optimization approach
+
+# Branch Protection Policy
+
+Both `master` and `staging` branches are protected:
+
+- All changes must be merged via Pull Request (PR)
+- Only authorized users (see CODEOWNERS) can approve and merge
+- All required status checks (tests, deploys) must pass before merging
+- Direct pushes to these branches are blocked
+- Branch protection is enforced in GitHub Settings > Branches
+
+---

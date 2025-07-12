@@ -1,3 +1,4 @@
+# See README.md for branch protection policy: master and staging are protected, all merges via PR, only authorized users can approve, and all status checks must pass.
 # 82ndrop Agent Deployment Makefile
 # 
 # IMPORTANT: When deploying with ADK, you will be prompted:
