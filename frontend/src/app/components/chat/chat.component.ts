@@ -54,8 +54,96 @@ interface ChatMessage {
               </div>
             </div>
 
+            <!-- Video generation prompt -->
+            <div
+              *ngIf="
+                message.type === 'agent' &&
+                !showGeneratePrompt &&
+                !showApiKeyInput
+              "
+              class="video-generation-prompt"
+            >
+              <button
+                (click)="showGenerateVideoPrompt()"
+                class="generate-video-btn"
+              >
+                🎬 Generate Video
+              </button>
+            </div>
+
             <div class="message-timestamp">
               {{ formatTimestamp(message.timestamp) }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Video Generation UI -->
+        <div *ngIf="showGeneratePrompt" class="video-generation-container">
+          <div class="video-generation-card">
+            <h3>🎬 Generate Video from Prompt</h3>
+            <p>
+              Ready to create your video? Enter your VEO3 API key to continue.
+            </p>
+
+            <div *ngIf="!showApiKeyInput" class="video-actions">
+              <button (click)="onGenerateVideoClick()" class="primary-btn">
+                🚀 Start Video Generation
+              </button>
+              <button (click)="resetVideoGeneration()" class="secondary-btn">
+                Cancel
+              </button>
+            </div>
+
+            <div *ngIf="showApiKeyInput" class="api-key-input">
+              <label for="veoApiKey">VEO3 API Key:</label>
+              <input
+                id="veoApiKey"
+                type="password"
+                [(ngModel)]="veoApiKey"
+                placeholder="Enter your VEO3 API key"
+                class="api-key-field"
+              />
+              <div class="api-key-actions">
+                <button
+                  (click)="onApiKeyContinue()"
+                  [disabled]="!veoApiKey.trim() || isGeneratingVideo"
+                  class="primary-btn"
+                >
+                  {{
+                    isGeneratingVideo ? '🎬 Generating...' : '🎬 Generate Video'
+                  }}
+                </button>
+                <button (click)="resetVideoGeneration()" class="secondary-btn">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Generated Video Display -->
+        <div *ngIf="generatedVideoUrl" class="video-result-container">
+          <div class="video-result-card">
+            <h3>✅ Video Generated Successfully!</h3>
+            <video
+              [src]="generatedVideoUrl"
+              controls
+              class="generated-video"
+              preload="metadata"
+            >
+              Your browser does not support the video tag.
+            </video>
+            <div class="video-actions">
+              <a
+                [href]="generatedVideoUrl"
+                download="82ndrop-video.mp4"
+                class="download-btn"
+              >
+                📥 Download Video
+              </a>
+              <button (click)="resetVideoGeneration()" class="secondary-btn">
+                Generate Another
+              </button>
             </div>
           </div>
         </div>
@@ -409,6 +497,201 @@ interface ChatMessage {
           font-size: 14px;
         }
       }
+
+      /* Video Generation Styles */
+      .video-generation-prompt {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #dee2e6;
+      }
+
+      .generate-video-btn {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: transform 0.2s;
+      }
+
+      .generate-video-btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .video-generation-container {
+        margin: 20px 0;
+        display: flex;
+        justify-content: center;
+      }
+
+      .video-generation-card {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        max-width: 500px;
+        width: 100%;
+      }
+
+      .video-generation-card h3 {
+        margin: 0 0 12px 0;
+        color: #495057;
+        font-size: 18px;
+      }
+
+      .video-generation-card p {
+        margin: 0 0 20px 0;
+        color: #6c757d;
+        font-size: 14px;
+      }
+
+      .video-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .primary-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: transform 0.2s;
+      }
+
+      .primary-btn:hover:not(:disabled) {
+        transform: translateY(-1px);
+      }
+
+      .primary-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .secondary-btn {
+        background: #f8f9fa;
+        color: #495057;
+        border: 1px solid #dee2e6;
+        padding: 12px 24px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+
+      .secondary-btn:hover {
+        background: #e9ecef;
+      }
+
+      .api-key-input {
+        margin-top: 16px;
+      }
+
+      .api-key-input label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #495057;
+      }
+
+      .api-key-field {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        font-size: 14px;
+        margin-bottom: 16px;
+        transition: border-color 0.2s;
+      }
+
+      .api-key-field:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .api-key-actions {
+        display: flex;
+        gap: 12px;
+      }
+
+      .video-result-container {
+        margin: 20px 0;
+        display: flex;
+        justify-content: center;
+      }
+
+      .video-result-card {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        max-width: 600px;
+        width: 100%;
+      }
+
+      .video-result-card h3 {
+        margin: 0 0 16px 0;
+        color: #28a745;
+        font-size: 18px;
+      }
+
+      .generated-video {
+        width: 100%;
+        max-width: 100%;
+        border-radius: 8px;
+        margin-bottom: 16px;
+      }
+
+      .download-btn {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        text-decoration: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        transition: transform 0.2s;
+        display: inline-block;
+      }
+
+      .download-btn:hover {
+        transform: translateY(-1px);
+      }
+
+      /* Desktop enhancements for video generation */
+      @media (min-width: 1200px) {
+        .video-generation-card,
+        .video-result-card {
+          max-width: 600px;
+          padding: 32px;
+        }
+
+        .video-generation-card h3,
+        .video-result-card h3 {
+          font-size: 20px;
+        }
+
+        .video-generation-card p {
+          font-size: 15px;
+        }
+
+        .primary-btn,
+        .secondary-btn,
+        .download-btn {
+          padding: 14px 28px;
+          font-size: 15px;
+        }
+      }
     `,
   ],
 })
@@ -421,6 +704,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   currentMessage = '';
   isLoading = false;
   private shouldScrollToBottom = false;
+
+  // Add state for VEO3 video generation flow
+  showGeneratePrompt = false;
+  showApiKeyInput = false;
+  veoApiKey = '';
+  isGeneratingVideo = false;
+  generatedVideoUrl: string | null = null;
 
   private subscriptions: Subscription[] = [];
 
@@ -662,5 +952,103 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         </div>`;
       }) // JSON blocks with copy button
       .replace(/`(.*?)`/g, '<code>$1</code>'); // Inline code
+  }
+
+  // Call this after displaying the Master Prompt
+  showGenerateVideoPrompt() {
+    this.showGeneratePrompt = true;
+  }
+
+  onGenerateVideoClick() {
+    this.showApiKeyInput = true;
+  }
+
+  async onApiKeyContinue() {
+    this.isGeneratingVideo = true;
+
+    try {
+      // Get the last agent message as the video prompt
+      const lastAgentMessage = this.messages
+        .filter((m) => m.type === 'agent')
+        .pop();
+
+      if (!lastAgentMessage) {
+        throw new Error(
+          'No video prompt available. Please generate a prompt first.'
+        );
+      }
+
+      // Check if we're in development mode
+      if (
+        typeof window !== 'undefined' &&
+        window.location.hostname === 'localhost'
+      ) {
+        // Development simulation - only run in localhost
+        console.log('Running video generation simulation in development mode');
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        this.isGeneratingVideo = false;
+        this.generatedVideoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4'; // placeholder
+      } else {
+        // Production mode - use actual backend integration
+        console.log('Generating video with backend integration');
+
+        const response = await this.agentService.generateVideo(
+          lastAgentMessage.content,
+          this.veoApiKey
+        );
+
+        this.isGeneratingVideo = false;
+
+        // Validate video URL from response
+        const videoUrl = response.videoUrl || response.url;
+        if (!videoUrl || typeof videoUrl !== 'string' || !videoUrl.trim()) {
+          throw new Error('Invalid or missing video URL in response');
+        }
+
+        // Assign validated URL
+        this.generatedVideoUrl = videoUrl;
+        console.log('Video generated successfully:', this.generatedVideoUrl);
+      }
+    } catch (error) {
+      console.error('Error generating video:', error);
+      this.isGeneratingVideo = false;
+      this.generatedVideoUrl = null; // Reset URL on error
+
+      // Show error message to user
+      this.addAgentMessage(
+        `❌ Video generation failed: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+        new Date().toISOString()
+      );
+    }
+  }
+
+  async resetVideoGeneration() {
+    try {
+      // Cancel any ongoing video generation processes
+      if (this.isGeneratingVideo) {
+        console.log('Cancelling ongoing video generation...');
+        // TODO: Implement actual cancellation logic when backend is ready
+        // const currentJobId = this.currentVideoJobId; // Would need to track this
+        // if (currentJobId) {
+        //   await this.agentService.cancelVideoGeneration(currentJobId);
+        // }
+      }
+
+      // Reset state variables
+      this.showGeneratePrompt = false;
+      this.showApiKeyInput = false;
+      this.veoApiKey = '';
+      this.isGeneratingVideo = false;
+      this.generatedVideoUrl = null;
+
+      console.log('Video generation state reset successfully');
+    } catch (error) {
+      console.error('Error during video generation reset:', error);
+      // Ensure critical state is reset even if there's an error
+      this.isGeneratingVideo = false;
+      this.generatedVideoUrl = null;
+    }
   }
 }
