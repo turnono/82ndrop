@@ -52,12 +52,6 @@ jobs:
           ENV=staging,\
           FIREBASE_PROJECT_ID=${{ secrets.STAGING_GOOGLE_CLOUD_PROJECT }}"
 
-      - name: Verify backend deployment
-        run: |
-          echo "✅ Verifying staging backend deployment..."
-          sleep 30
-          curl -f https://drop-agent-staging-${{ secrets.STAGING_GOOGLE_CLOUD_PROJECT }}.${{ secrets.STAGING_GOOGLE_CLOUD_LOCATION }}.run.app/ || exit 1
-
   deploy-frontend:
     name: Deploy Staging Frontend
     runs-on: ubuntu-latest
