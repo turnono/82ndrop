@@ -3,20 +3,15 @@ name: Deploy to Staging
 on:
   push:
     branches: [staging]
-    paths:
-      - "drop_agent/**"
-      - "main.py"
-      - "requirements.txt"
-      - "frontend/**"
-      - "Dockerfile"
-      - ".github/workflows/deploy-staging.yml"
+  pull_request:
+    branches: [staging]
   workflow_dispatch:
 
 env:
-  GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
-  GOOGLE_CLOUD_LOCATION: ${{ secrets.GOOGLE_CLOUD_LOCATION }}
-  GOOGLE_GENAI_USE_VERTEXAI: ${{ secrets.GOOGLE_GENAI_USE_VERTEXAI }}
-  REASONING_ENGINE_ID: ${{ secrets.REASONING_ENGINE_ID }}
+  GOOGLE_CLOUD_PROJECT: ${{ secrets.STAGING_GOOGLE_CLOUD_PROJECT }}
+  GOOGLE_CLOUD_LOCATION: ${{ secrets.STAGING_GOOGLE_CLOUD_LOCATION }}
+  GOOGLE_GENAI_USE_VERTEXAI: ${{ secrets.STAGING_GOOGLE_GENAI_USE_VERTEXAI }}
+  REASONING_ENGINE_ID: ${{ secrets.STAGING_REASONING_ENGINE_ID }}
   ENV: staging
 
 jobs:
@@ -30,12 +25,12 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GOOGLE_CLOUD_SA_KEY }}
+          credentials_json: ${{ secrets.STAGING_GOOGLE_CLOUD_SA_KEY }}
 
       - name: Setup Google Cloud CLI
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
+          project_id: ${{ secrets.STAGING_GOOGLE_CLOUD_PROJECT }}
 
       - name: Install dependencies
         run: |
@@ -46,15 +41,16 @@ jobs:
           echo "🚀 Deploying backend to Cloud Run (staging)..."
           gcloud run deploy drop-agent-staging \
             --source . \
-            --region ${{ secrets.GOOGLE_CLOUD_LOCATION }} \
+            --region ${{ secrets.STAGING_GOOGLE_CLOUD_LOCATION }} \
             --allow-unauthenticated \
-            --service-account ${{ secrets.GOOGLE_CLOUD_PROJECT }}@appspot.gserviceaccount.com \
-            --set-env-vars="GOOGLE_CLOUD_PROJECT=${{ secrets.GOOGLE_CLOUD_PROJECT }},\
-          GOOGLE_CLOUD_LOCATION=${{ secrets.GOOGLE_CLOUD_LOCATION }},\
-          GOOGLE_GENAI_USE_VERTEXAI=${{ secrets.GOOGLE_GENAI_USE_VERTEXAI }},\
-          REASONING_ENGINE_ID=${{ secrets.REASONING_ENGINE_ID }},\
+            --port 8000 \
+            --service-account ${{ secrets.STAGING_GOOGLE_CLOUD_PROJECT }}@appspot.gserviceaccount.com \
+            --set-env-vars="GOOGLE_CLOUD_PROJECT=${{ secrets.STAGING_GOOGLE_CLOUD_PROJECT }},\
+          GOOGLE_CLOUD_LOCATION=${{ secrets.STAGING_GOOGLE_CLOUD_LOCATION }},\
+          GOOGLE_GENAI_USE_VERTEXAI=${{ secrets.STAGING_GOOGLE_GENAI_USE_VERTEXAI }},\
+          REASONING_ENGINE_ID=${{ secrets.STAGING_REASONING_ENGINE_ID }},\
           ENV=staging,\
-          FIREBASE_PROJECT_ID=${{ secrets.GOOGLE_CLOUD_PROJECT }}"
+          FIREBASE_PROJECT_ID=${{ secrets.STAGING_GOOGLE_CLOUD_PROJECT }}"
 
   deploy-frontend:
     name: Deploy Staging Frontend
@@ -67,7 +63,7 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GOOGLE_CLOUD_SA_KEY }}
+          credentials_json: ${{ secrets.STAGING_GOOGLE_CLOUD_SA_KEY }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -79,7 +75,7 @@ jobs:
       - name: Setup Google Cloud CLI
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
+          project_id: ${{ secrets.STAGING_GOOGLE_CLOUD_PROJECT }}
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
@@ -90,16 +86,14 @@ jobs:
           npm ci
 
       - name: Build frontend
-        env:
-          STAGING_API_URL: https://drop-agent-staging-${{ secrets.GOOGLE_CLOUD_PROJECT }}.${{ secrets.GOOGLE_CLOUD_LOCATION }}.run.app
         run: |
           cd frontend
-          npm run build:staging
+          npm run build -- --configuration=production
 
       - name: Deploy frontend to Firebase Hosting (Staging)
         run: |
           cd frontend
-          firebase deploy --only hosting:82ndrop-staging --project=${{ secrets.GOOGLE_CLOUD_PROJECT }}
+          firebase deploy --only hosting:82ndrop-staging --project=${{ secrets.STAGING_GOOGLE_CLOUD_PROJECT }}
 
   notify-success:
     name: Notify Staging Success
@@ -112,7 +106,7 @@ jobs:
           if [ "${{ needs.deploy-backend.result }}" == "success" ] && [ "${{ needs.deploy-frontend.result }}" == "success" ]; then
             echo "✅ Staging deployment successful!"
             echo "🌐 Frontend (staging): https://82ndrop-staging.web.app"
-            echo "🔧 Backend (staging): https://drop-agent-staging-${{ secrets.GOOGLE_CLOUD_PROJECT }}.${{ secrets.GOOGLE_CLOUD_LOCATION }}.run.app"
+            echo "🔧 Backend (staging): https://drop-agent-staging-${{ secrets.STAGING_GOOGLE_CLOUD_PROJECT }}.${{ secrets.STAGING_GOOGLE_CLOUD_LOCATION }}.run.app"
           else
             echo "❌ Staging deployment failed!"
             echo "Backend status: ${{ needs.deploy-backend.result }}"
