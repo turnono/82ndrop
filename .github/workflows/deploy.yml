@@ -3,22 +3,8 @@ name: Deploy to Production
 on:
   push:
     branches: [master]
-    paths:
-      - "drop_agent/**"
-      - "main.py"
-      - "requirements.txt"
-      - "frontend/**"
-      - "Dockerfile"
-      - ".github/workflows/deploy.yml"
   pull_request:
     branches: [master]
-    paths:
-      - "drop_agent/**"
-      - "main.py"
-      - "requirements.txt"
-      - "frontend/**"
-      - "Dockerfile"
-      - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
 env:
@@ -103,7 +89,7 @@ jobs:
       - name: Build frontend
         run: |
           cd frontend
-          npm run build
+          npm run build -- --configuration=production
 
       - name: Deploy frontend to Firebase Hosting
         run: |

@@ -14,11 +14,6 @@ import {
 } from 'firebase/database';
 import { AuthService } from './auth.service';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { environment } from '../../environments/environment';
-
-function getCollectionName(base: string): string {
-  return environment.production ? base : `staging_${base}`;
-}
 
 export interface ChatSession {
   id: string;
@@ -77,10 +72,7 @@ export class SessionHistoryService {
   }
 
   private loadUserSessions(userId: string) {
-    const sessionsRef = ref(
-      this.db,
-      `${getCollectionName('sessions')}/${userId}`
-    );
+    const sessionsRef = ref(this.db, `sessions/${userId}`);
     const sessionsQuery = query(
       sessionsRef,
       orderByChild('updatedAt'),
@@ -122,18 +114,12 @@ export class SessionHistoryService {
       preview: 'New conversation started',
     };
 
-    const sessionsRef = ref(
-      this.db,
-      `${getCollectionName('sessions')}/${user.uid}`
-    );
+    const sessionsRef = ref(this.db, `sessions/${user.uid}`);
 
     // Use ADK session ID if provided, otherwise generate new one
     let sessionRef;
     if (adkSessionId) {
-      sessionRef = ref(
-        this.db,
-        `${getCollectionName('sessions')}/${user.uid}/${adkSessionId}`
-      );
+      sessionRef = ref(this.db, `sessions/${user.uid}/${adkSessionId}`);
       await set(sessionRef, sessionData);
     } else {
       sessionRef = push(sessionsRef);
@@ -166,10 +152,7 @@ export class SessionHistoryService {
     this.messagesSubject.next([]);
 
     // Load session info
-    const sessionRef = ref(
-      this.db,
-      `${getCollectionName('sessions')}/${user.uid}/${sessionId}`
-    );
+    const sessionRef = ref(this.db, `sessions/${user.uid}/${sessionId}`);
     const sessionSnapshot = await get(sessionRef);
 
     if (sessionSnapshot.exists()) {
@@ -186,10 +169,7 @@ export class SessionHistoryService {
     }
 
     // Load messages for this specific session
-    const messagesRef = ref(
-      this.db,
-      `${getCollectionName('messages')}/${sessionId}`
-    );
+    const messagesRef = ref(this.db, `messages/${sessionId}`);
     const messagesQuery = query(messagesRef, orderByChild('timestamp'));
 
     return new Promise((resolve) => {
@@ -239,18 +219,12 @@ export class SessionHistoryService {
     };
 
     // Save message
-    const messagesRef = ref(
-      this.db,
-      `${getCollectionName('messages')}/${sessionId}`
-    );
+    const messagesRef = ref(this.db, `messages/${sessionId}`);
     const newMessageRef = push(messagesRef);
     await set(newMessageRef, messageData);
 
     // Update session metadata
-    const sessionRef = ref(
-      this.db,
-      `${getCollectionName('sessions')}/${user.uid}/${sessionId}`
-    );
+    const sessionRef = ref(this.db, `sessions/${user.uid}/${sessionId}`);
     const sessionSnapshot = await get(sessionRef);
 
     if (sessionSnapshot.exists()) {
@@ -276,10 +250,7 @@ export class SessionHistoryService {
     const user = this.authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const sessionRef = ref(
-      this.db,
-      `${getCollectionName('sessions')}/${user.uid}/${sessionId}/title`
-    );
+    const sessionRef = ref(this.db, `sessions/${user.uid}/${sessionId}/title`);
     await set(sessionRef, title);
   }
 
@@ -288,17 +259,11 @@ export class SessionHistoryService {
     if (!user) throw new Error('User not authenticated');
 
     // Delete messages
-    const messagesRef = ref(
-      this.db,
-      `${getCollectionName('messages')}/${sessionId}`
-    );
+    const messagesRef = ref(this.db, `messages/${sessionId}`);
     await set(messagesRef, null);
 
     // Delete session
-    const sessionRef = ref(
-      this.db,
-      `${getCollectionName('sessions')}/${user.uid}/${sessionId}`
-    );
+    const sessionRef = ref(this.db, `sessions/${user.uid}/${sessionId}`);
     await set(sessionRef, null);
   }
 
