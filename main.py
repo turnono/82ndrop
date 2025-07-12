@@ -11,7 +11,7 @@ from google.adk.cli.fast_api import get_fast_api_app
 from datetime import datetime
 from starlette.middleware.base import BaseHTTPMiddleware
 import vertexai
-from vertexai.preview.generative_ai import GenerativeModel
+from vertexai.generative_models import GenerativeModel
 import json
 
 # Initialize Firebase Admin SDK
@@ -133,7 +133,7 @@ async def generate_video(request: Request):
         output_gcs_uri = f"gs://{video_bucket}/users/{user_id}/sessions/{session_id}/"
 
         # Get the Veo3 model
-        model = GenerativeModel("veo-3.0-generate-preview")
+        model = GenerativeModel("veo-3")
 
         # Start video generation
         operation = model.generate_video(
@@ -174,7 +174,7 @@ async def check_video_status(job_id: str, request: Request):
         )
 
         # Get the Veo3 model
-        model = GenerativeModel("veo-3.0-generate-preview")
+        model = GenerativeModel("veo-3")
 
         # Get operation status
         operation = model.get_operation(job_id)
@@ -242,7 +242,7 @@ async def cancel_video_generation(job_id: str, request: Request):
         )
 
         # Get the Veo3 model
-        model = GenerativeModel("veo-3.0-generate-preview")
+        model = GenerativeModel("veo-3")
 
         # Get and cancel the operation
         try:
