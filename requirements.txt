@@ -4,3 +4,8 @@ firebase-admin
 google-adk
 httptools
 httpx
+
+# Vertex AI dependencies
+google-cloud-aiplatform>=1.95.1
+vertexai>=1.43.0
+google-generativeai>=0.8.5
