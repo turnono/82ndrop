@@ -261,3 +261,17 @@ Both `master` and `staging` branches are protected:
 - Branch protection is enforced in GitHub Settings > Branches
 
 ---
+
+# Dependency Version Audit Backlog
+
+**Task:** Regularly audit and update the upper bounds for pre-1.0.0 packages in `requirements.txt` (e.g., `uvicorn`, `fastapi`, `firebase-admin`, `google-adk`, `httptools`, `httpx`, `python-dotenv`, `vertexai`, `google-generativeai`, `google-cloud-storage`, `google-auth`, `python-multipart`).
+
+**Reason:** Several dependencies are capped below version 1.0.0, which will block major upgrades once they reach 1.0.0. To ensure the project stays current and secure, periodically check for new major releases and update the version constraints accordingly.
+
+**Action Items:**
+
+- Schedule a regular (e.g., monthly or quarterly) review of dependency versions.
+- Update upper bounds and test compatibility when new major versions are released.
+- Consider automating this check in CI for proactive alerts.
+
+---

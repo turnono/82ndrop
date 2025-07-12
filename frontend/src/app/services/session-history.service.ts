@@ -14,11 +14,7 @@ import {
 } from 'firebase/database';
 import { AuthService } from './auth.service';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { environment } from '../../environments/environment';
-
-function getCollectionName(base: string): string {
-  return environment.production ? base : `staging_${base}`;
-}
+import { getCollectionName } from '../utils/firebase.utils';
 
 export interface ChatSession {
   id: string;
