@@ -504,12 +504,17 @@ export class AgentService {
       throw new Error('No active session');
     }
 
+    const headers = await this.getAuthHeaders();
     const response = await this.http
-      .post(`${this.apiUrl}/generate-video`, {
-        prompt,
-        user_id: user.uid,
-        session_id: currentSession.id,
-      })
+      .post(
+        `${this.apiUrl}/generate-video`,
+        {
+          prompt,
+          user_id: user.uid,
+          session_id: currentSession.id,
+        },
+        { headers }
+      )
       .toPromise();
 
     return response;
