@@ -13,6 +13,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import vertexai
 from vertexai.generative_models import GenerativeModel
 import json
+import google.generativeai as genai
+from google.generativeai.types import GenerateVideosConfig
 
 # Initialize Firebase Admin SDK
 def initialize_firebase():
@@ -104,125 +106,70 @@ async def generate_video(request: Request):
         user_id = body.get("user_id")
         session_id = body.get("session_id")
 
-        if not all([prompt, user_id, session_id]):
-            raise HTTPException(status_code=400, detail="Missing required fields")
+        if not prompt:
+            raise HTTPException(status_code=400, detail="Prompt is required")
 
-        # Initialize Vertex AI with default project credentials
-        try:
-            vertexai.init(
-                project=os.getenv("GOOGLE_CLOUD_PROJECT"),
-                location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-            )
-        except Exception as e:
-            logging.error(f"Failed to initialize Vertex AI: {str(e)}")
-            raise HTTPException(
-                status_code=500, 
-                detail="Failed to initialize video generation service"
-            )
-
-        # Get environment and project settings
-        project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
-        env = os.getenv("ENV", "development")
-        
-        if not project_id:
-            raise HTTPException(
-                status_code=500,
-                detail="GOOGLE_CLOUD_PROJECT environment variable is not set"
-            )
-
-        # Use the same bucket naming convention as deploy.yml
-        video_bucket = f"82ndrop-videos{'-staging' if env != 'production' else ''}-{project_id}"
-        output_gcs_uri = f"gs://{video_bucket}/users/{user_id}/sessions/{session_id}/"
-
-        # Get the Veo3 model
-        model = GenerativeModel("veo-3")
-
-        # Start video generation
-        operation = model.generate_video(
-            prompt=prompt,
-            aspect_ratio="9:16",
-            duration=8,
-            negative_prompt="blurry, low quality, distorted, unrealistic",
-            output_gcs_uri=output_gcs_uri
+        # Initialize Google GenAI client
+        genai.configure(
+            project=os.getenv("GOOGLE_CLOUD_PROJECT"),
+            location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
         )
+        client = genai.Client()
 
-        # Log the operation details
-        logging.info(f"Started video generation for user {user_id}, session {session_id}")
-        logging.info(f"Operation name: {operation.name}")
+        # Generate video
+        operation = client.models.generate_videos(
+            model="veo-3.0-generate-preview",
+            prompt=prompt,
+            config=GenerateVideosConfig(
+                output_gcs_uri=f"gs://{os.getenv('VIDEO_BUCKET')}/{user_id}/{session_id}/",
+                person_generation="allow_adult"  # Default setting
+            ),
+        )
 
         # Return operation ID for status checking
         return {
-            "jobId": operation.name,
-            "status": "processing",
-            "message": "Video generation started successfully"
+            "operation_id": operation.name,
+            "status": "processing"
         }
 
     except Exception as e:
-        logging.error(f"Error generating video: {str(e)}")
+        logging.error(f"Error in video generation: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/video-status/{job_id}")
-async def check_video_status(job_id: str, request: Request):
+@app.get("/video-status/{operation_id}")
+async def check_video_status(operation_id: str, request: Request):
     try:
         # Get user from request state
         user = request.state.user
         if not user:
             raise HTTPException(status_code=401, detail="User not authenticated")
 
-        # Initialize Vertex AI
-        vertexai.init(
+        # Initialize Google GenAI client
+        genai.configure(
             project=os.getenv("GOOGLE_CLOUD_PROJECT"),
             location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
         )
-
-        # Get the Veo3 model
-        model = GenerativeModel("veo-3")
+        client = genai.Client()
 
         # Get operation status
-        operation = model.get_operation(job_id)
+        operation = client.operations.get(operation_id)
 
         if operation.done:
             if operation.error:
-                logging.error(f"Video generation failed: {operation.error.message}")
                 return {
                     "status": "error",
                     "error": operation.error.message
                 }
             else:
-                # Add defensive checks for operation result
-                if not operation.result:
-                    logging.error("Operation completed but result is missing")
-                    return {
-                        "status": "error",
-                        "error": "Operation result is missing"
-                    }
-                
-                if not hasattr(operation.result, 'generated_videos') or not operation.result.generated_videos:
-                    logging.error("Operation completed but no videos were generated")
-                    return {
-                        "status": "error",
-                        "error": "No videos were generated"
-                    }
-                
-                # Get video URL from the response
-                video_url = operation.result.generated_videos[0].video.uri
-                logging.info(f"Video generation completed: {video_url}")
+                video_uri = operation.result.generated_videos[0].video.uri
                 return {
                     "status": "completed",
-                    "videoUrl": video_url
+                    "video_url": video_uri
                 }
         else:
-            # Still processing - add defensive check for metadata
-            if not hasattr(operation, 'metadata'):
-                logging.warning("Operation metadata is missing")
-                progress = 0
-            else:
-                progress = operation.metadata.get("progress", 0)
-            
-            logging.info(f"Video generation in progress: {progress}%")
             return {
                 "status": "processing",
-                "progress": progress
+                "operation_id": operation_id
             }
 
     except Exception as e:

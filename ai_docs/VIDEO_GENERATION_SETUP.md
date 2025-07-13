@@ -43,7 +43,6 @@ DEBUG=True
 ```json
 {
   "prompt": "Your video prompt",
-  "api_key": "Your Vertex AI API key",
   "user_id": "Firebase user ID",
   "session_id": "Current session ID"
 }
@@ -89,13 +88,16 @@ DEBUG=True
 
 ## Video Generation Parameters
 
-The video generation is configured with the following default parameters:
+The video generation is configured with the following default parameters in the `generation_config`:
 
-- **Aspect Ratio:** 9:16 (vertical format for TikTok)
-- **Duration:** 8 seconds (maximum allowed)
-- **Sample Count:** 1 video per request
-- **Person Generation:** Allows adult people only
-- **Negative Prompt:** "blurry, low quality, distorted, unrealistic"
+```python
+generation_config = {
+    "aspect_ratio": "9:16",  # vertical format for TikTok
+    "duration": 8,  # maximum allowed duration in seconds
+    "negative_prompt": "blurry, low quality, distorted, unrealistic",
+    "output_gcs_uri": "gs://{VIDEO_BUCKET}/users/{user_id}/sessions/{session_id}/"
+}
+```
 
 ## Storage Structure
 
@@ -134,16 +136,18 @@ The application logs important events with the following levels:
 
 ## Security Considerations
 
-1. **API Key Protection:**
-
-   - API keys are only used server-side
-   - Keys are never logged or exposed in responses
-
-2. **Access Control:**
+1. **Authentication:**
 
    - All endpoints require Firebase authentication
    - Users can only access their own videos
    - Storage paths are scoped to user ID
+
+2. **Access Control:**
+
+   - Video generation is restricted to only whitelisted admin users (configured via Firebase custom claims)
+   - All endpoints are protected by FirebaseAuthMiddleware
+   - Users can only access their own videos
+   - Admin access is managed through Firebase custom claims ('agent_access' and 'video_admin' claims)
 
 3. **Resource Limits:**
    - One video generation at a time per user
@@ -163,7 +167,7 @@ For local development:
 curl -X POST http://localhost:8080/generate-video \
   -H "Authorization: Bearer $FIREBASE_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"prompt":"test prompt","api_key":"key","user_id":"uid","session_id":"sid"}'
+  -d '{"prompt":"test prompt","user_id":"uid","session_id":"sid"}'
 
 # Check status
 curl -X GET http://localhost:8080/video-status/{job_id} \
@@ -173,3 +177,36 @@ curl -X GET http://localhost:8080/video-status/{job_id} \
 curl -X POST http://localhost:8080/cancel-video/{job_id} \
   -H "Authorization: Bearer $FIREBASE_TOKEN"
 ```
+
+## Implementation Details
+
+The video generation uses Vertex AI's `GenerativeModel` class with the following key methods:
+
+1. **Generate Video:**
+
+```python
+model = GenerativeModel("veo-3")
+response = model.generate_content(
+    prompt=prompt,
+    generation_config={
+        "aspect_ratio": "9:16",
+        "duration": 8,
+        "negative_prompt": "blurry, low quality, distorted, unrealistic",
+        "output_gcs_uri": output_gcs_uri
+    }
+)
+```
+
+2. **Check Status:**
+
+```python
+response = model.get_content_task(job_id)
+if response.done:
+    if response.error:
+        # Handle error
+    else:
+        video_url = response.result.video_url
+        # Process video URL
+```
+
+The implementation follows Vertex AI's latest API for video generation, using the `generate_content` method with appropriate configuration parameters.
