@@ -91,32 +91,33 @@ async def generate_video(request: Request):
         if not user:
             raise HTTPException(status_code=401, detail="User not authenticated")
 
+        # Check if user is authorized for video generation
+        if user.get('email') != 'turnono@gmail.com':
+            raise HTTPException(
+                status_code=403, 
+                detail="Video generation is restricted to authorized users only"
+            )
+
         # Get request body
         body = await request.json()
         prompt = body.get("prompt")
-        api_key = body.get("api_key")
         user_id = body.get("user_id")
         session_id = body.get("session_id")
 
-        if not all([prompt, api_key, user_id, session_id]):
+        if not all([prompt, user_id, session_id]):
             raise HTTPException(status_code=400, detail="Missing required fields")
 
-        # Initialize Vertex AI with proper credentials
-        from google.oauth2 import service_account
+        # Initialize Vertex AI with default project credentials
         try:
-            credentials = service_account.Credentials.from_service_account_info(
-                api_key if isinstance(api_key, dict) else json.loads(api_key)
-            )
             vertexai.init(
                 project=os.getenv("GOOGLE_CLOUD_PROJECT"),
-                location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1"),
-                credentials=credentials
+                location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
             )
         except Exception as e:
-            logging.error(f"Failed to initialize Vertex AI with credentials: {str(e)}")
+            logging.error(f"Failed to initialize Vertex AI: {str(e)}")
             raise HTTPException(
-                status_code=400, 
-                detail="Invalid service account credentials provided"
+                status_code=500, 
+                detail="Failed to initialize video generation service"
             )
 
         # Get environment and project settings

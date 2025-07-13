@@ -489,30 +489,30 @@ export class AgentService {
   /**
    * Generate video from prompt using VEO3 API
    */
-  async generateVideo(prompt: string, apiKey: string): Promise<any> {
-    try {
-      const headers = await this.getAuthHeaders();
-      const user = this.authService.getCurrentUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      const videoRequest = {
-        prompt: prompt,
-        api_key: apiKey,
-        user_id: user.uid,
-        session_id: this.currentSessionId,
-      };
-
-      const response = await this.http
-        .post<any>(`${this.apiUrl}/generate-video`, videoRequest, { headers })
-        .toPromise();
-
-      return response;
-    } catch (error) {
-      console.error('Error generating video:', error);
-      throw error;
+  async generateVideo(prompt: string): Promise<any> {
+    const user = this.authService.getCurrentUser();
+    if (!user) {
+      throw new Error('User not authenticated');
     }
+
+    if (user.email !== 'turnono@gmail.com') {
+      throw new Error('User not authorized for video generation');
+    }
+
+    const currentSession = this.sessionHistoryService.getCurrentSession();
+    if (!currentSession) {
+      throw new Error('No active session');
+    }
+
+    const response = await this.http
+      .post(`${this.apiUrl}/generate-video`, {
+        prompt,
+        user_id: user.uid,
+        session_id: currentSession.id,
+      })
+      .toPromise();
+
+    return response;
   }
 
   /**

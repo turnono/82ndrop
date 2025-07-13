@@ -59,7 +59,7 @@ interface ChatMessage {
               *ngIf="
                 message.type === 'agent' &&
                 !showGeneratePrompt &&
-                !showApiKeyInput
+                isAuthorizedForVideo()
               "
               class="video-generation-prompt"
             >
@@ -82,41 +82,23 @@ interface ChatMessage {
           <div class="video-generation-card">
             <h3>🎬 Generate Video from Prompt</h3>
             <p>
-              Ready to create your video? Enter your VEO3 API key to continue.
+              Ready to create your video? Click the button below to start
+              generation.
             </p>
 
-            <div *ngIf="!showApiKeyInput" class="video-actions">
-              <button (click)="onGenerateVideoClick()" class="primary-btn">
-                🚀 Start Video Generation
+            <div class="video-actions">
+              <button
+                (click)="onGenerateVideoClick()"
+                class="primary-btn"
+                [disabled]="isGeneratingVideo"
+              >
+                {{
+                  isGeneratingVideo ? '🎬 Generating...' : '🎬 Generate Video'
+                }}
               </button>
               <button (click)="resetVideoGeneration()" class="secondary-btn">
                 Cancel
               </button>
-            </div>
-
-            <div *ngIf="showApiKeyInput" class="api-key-input">
-              <label for="veoApiKey">VEO3 API Key:</label>
-              <input
-                id="veoApiKey"
-                type="password"
-                [(ngModel)]="veoApiKey"
-                placeholder="Enter your VEO3 API key"
-                class="api-key-field"
-              />
-              <div class="api-key-actions">
-                <button
-                  (click)="onApiKeyContinue()"
-                  [disabled]="!veoApiKey.trim() || isGeneratingVideo"
-                  class="primary-btn"
-                >
-                  {{
-                    isGeneratingVideo ? '🎬 Generating...' : '🎬 Generate Video'
-                  }}
-                </button>
-                <button (click)="resetVideoGeneration()" class="secondary-btn">
-                  Cancel
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -955,15 +937,33 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   // Call this after displaying the Master Prompt
+  isAuthorizedForVideo(): boolean {
+    const user = this.authService.getCurrentUser();
+    return user?.email === 'turnono@gmail.com';
+  }
+
+  // Show video generation UI
   showGenerateVideoPrompt() {
+    if (!this.isAuthorizedForVideo()) {
+      this.addAgentMessage(
+        'Sorry, video generation is currently restricted to authorized users only.',
+        new Date().toISOString()
+      );
+      return;
+    }
     this.showGeneratePrompt = true;
   }
 
-  onGenerateVideoClick() {
-    this.showApiKeyInput = true;
-  }
+  // Handle video generation
+  async onGenerateVideoClick() {
+    if (!this.isAuthorizedForVideo()) {
+      this.addAgentMessage(
+        'Sorry, you are not authorized to generate videos.',
+        new Date().toISOString()
+      );
+      return;
+    }
 
-  async onApiKeyContinue() {
     this.isGeneratingVideo = true;
 
     try {
@@ -978,41 +978,26 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         );
       }
 
-      // Check if we're in development mode
-      if (
-        typeof window !== 'undefined' &&
-        window.location.hostname === 'localhost'
-      ) {
-        // Development simulation - only run in localhost
-        console.log('Running video generation simulation in development mode');
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-        this.isGeneratingVideo = false;
-        this.generatedVideoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4'; // placeholder
-      } else {
-        // Production mode - use actual backend integration
-        console.log('Generating video with backend integration');
+      // Call the backend to generate video
+      const response = await this.agentService.generateVideo(
+        lastAgentMessage.content
+      );
 
-        const response = await this.agentService.generateVideo(
-          lastAgentMessage.content,
-          this.veoApiKey
-        );
+      this.isGeneratingVideo = false;
 
-        this.isGeneratingVideo = false;
-
-        // Validate video URL from response
-        const videoUrl = response.videoUrl || response.url;
-        if (!videoUrl || typeof videoUrl !== 'string' || !videoUrl.trim()) {
-          throw new Error('Invalid or missing video URL in response');
-        }
-
-        // Assign validated URL
-        this.generatedVideoUrl = videoUrl;
-        console.log('Video generated successfully:', this.generatedVideoUrl);
+      // Validate video URL from response
+      const videoUrl = response.videoUrl || response.url;
+      if (!videoUrl || typeof videoUrl !== 'string' || !videoUrl.trim()) {
+        throw new Error('Invalid or missing video URL in response');
       }
+
+      // Assign validated URL
+      this.generatedVideoUrl = videoUrl;
+      console.log('Video generated successfully:', this.generatedVideoUrl);
     } catch (error) {
       console.error('Error generating video:', error);
       this.isGeneratingVideo = false;
-      this.generatedVideoUrl = null; // Reset URL on error
+      this.generatedVideoUrl = null;
 
       // Show error message to user
       this.addAgentMessage(
