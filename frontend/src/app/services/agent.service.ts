@@ -54,6 +54,16 @@ export interface UserProfile {
   permissions: { [key: string]: any };
 }
 
+export interface VideoGenerationResponse {
+  status: string;
+  video_uri: string;
+  operation_name: string;
+  user_id: string;
+  session_id: string;
+  created_at: string;
+  videoUrl?: string; // For the transformed HTTPS URL
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -487,9 +497,25 @@ export class AgentService {
   }
 
   /**
+   * Transform a GCS URL to a cloud storage URL
+   */
+  private transformGcsUrl(gcsUrl: string): string {
+    if (!gcsUrl) return '';
+    if (!gcsUrl.startsWith('gs://')) return gcsUrl;
+
+    // Remove 'gs://' and split into bucket and path
+    const withoutProtocol = gcsUrl.replace('gs://', '');
+    const [bucket, ...pathParts] = withoutProtocol.split('/');
+    const path = pathParts.join('/');
+
+    // Return the cloud storage URL
+    return `https://storage.cloud.google.com/${bucket}/${path}`;
+  }
+
+  /**
    * Generate video from prompt using VEO3 API
    */
-  async generateVideo(prompt: string): Promise<any> {
+  async generateVideo(prompt: string): Promise<VideoGenerationResponse> {
     const user = this.authService.getCurrentUser();
     if (!user) {
       throw new Error('User not authenticated');
@@ -506,7 +532,7 @@ export class AgentService {
 
     const headers = await this.getAuthHeaders();
     const response = await this.http
-      .post(
+      .post<VideoGenerationResponse>(
         `${this.apiUrl}/generate-video`,
         {
           prompt,
@@ -516,6 +542,15 @@ export class AgentService {
         { headers }
       )
       .toPromise();
+
+    if (!response) {
+      throw new Error('No response received from video generation');
+    }
+
+    // Transform the video URL if it exists in the response
+    if (response.video_uri) {
+      response.videoUrl = this.transformGcsUrl(response.video_uri);
+    }
 
     return response;
   }

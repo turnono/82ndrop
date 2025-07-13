@@ -10,7 +10,11 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { AgentService, ChatResponse } from '../../services/agent.service';
+import {
+  AgentService,
+  ChatResponse,
+  VideoGenerationResponse,
+} from '../../services/agent.service';
 import { AuthService } from '../../services/auth.service';
 import { SessionHistoryService } from '../../services/session-history.service';
 import { Subscription } from 'rxjs';
@@ -118,8 +122,8 @@ interface ChatMessage {
             <div class="video-actions">
               <a
                 [href]="generatedVideoUrl"
-                download="82ndrop-video.mp4"
                 class="download-btn"
+                (click)="openVideoInNewTab($event)"
               >
                 📥 Download Video
               </a>
@@ -985,14 +989,22 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
       this.isGeneratingVideo = false;
 
-      // Validate video URL from response
-      const videoUrl = response.videoUrl || response.url;
+      // Get video URL from response - prefer transformed URL if available
+      const videoUrl = response.videoUrl || response.video_uri;
       if (!videoUrl || typeof videoUrl !== 'string' || !videoUrl.trim()) {
         throw new Error('Invalid or missing video URL in response');
       }
 
-      // Assign validated URL
-      this.generatedVideoUrl = videoUrl;
+      // Transform GCS URL if needed (as a backup in case service didn't do it)
+      if (videoUrl.startsWith('gs://')) {
+        const withoutProtocol = videoUrl.replace('gs://', '');
+        const [bucket, ...pathParts] = withoutProtocol.split('/');
+        const path = pathParts.join('/');
+        this.generatedVideoUrl = `https://storage.cloud.google.com/${bucket}/${path}`;
+      } else {
+        this.generatedVideoUrl = videoUrl;
+      }
+
       console.log('Video generated successfully:', this.generatedVideoUrl);
     } catch (error) {
       console.error('Error generating video:', error);
@@ -1009,7 +1021,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     }
   }
 
-  async resetVideoGeneration() {
+  resetVideoGeneration() {
     try {
       // Cancel any ongoing video generation processes
       if (this.isGeneratingVideo) {
@@ -1034,6 +1046,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       // Ensure critical state is reset even if there's an error
       this.isGeneratingVideo = false;
       this.generatedVideoUrl = null;
+    }
+  }
+
+  openVideoInNewTab(event: MouseEvent): void {
+    event.preventDefault();
+    if (this.generatedVideoUrl) {
+      window.open(this.generatedVideoUrl, '_blank');
     }
   }
 }
