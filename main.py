@@ -123,7 +123,7 @@ async def generate_video(request: Request):
                 }
             ],
             "parameters": {
-                "storageUri": f"gs://82ndrop-videos-staging-taajirah/users/{user_id}/sessions/{session_id}/",
+                "storageUri": f"gs://{get_video_bucket()}/users/{user_id}/sessions/{session_id}/",
                 "durationSeconds": 8,
                 "aspectRatio": "16:9",
                 "sampleCount": 1
@@ -160,6 +160,13 @@ async def generate_video(request: Request):
     except Exception as e:
         logging.error(f"Error generating video: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+def get_video_bucket():
+    """Get the appropriate GCS bucket based on environment."""
+    env = os.getenv('ENV', 'staging')  # Default to staging for safety
+    if env == 'production':
+        return "82ndrop-videos-taajirah"
+    return "82ndrop-videos-staging-taajirah"
 
 @app.get("/video-status/{operation_name:path}")
 async def check_video_status(operation_name: str, request: Request):
@@ -203,7 +210,7 @@ async def check_video_status(operation_name: str, request: Request):
                     # Initialize storage client
                     from google.cloud import storage
                     storage_client = storage.Client()
-                    bucket_name = "82ndrop-videos-staging-taajirah"
+                    bucket_name = get_video_bucket()
                     bucket = storage_client.bucket(bucket_name)
                     
                     # Check test directory first
