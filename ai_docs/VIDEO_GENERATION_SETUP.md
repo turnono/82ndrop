@@ -1,212 +1,250 @@
 # Video Generation Setup
 
-This document explains how to set up the video generation functionality using Veo3 on Vertex AI.
+### Video Format Requirements
 
-## Prerequisites
+1. TikTok-Native Format
 
-1. A Google Cloud Project with Vertex AI API enabled
-2. A Firebase project for authentication
-3. A Google Cloud Storage bucket for storing generated videos
-4. The Veo3 API enabled in your project
+```
+- Aspect Ratio: 9:16 (vertical)
+- Duration: 8-30 seconds
+- Resolution: 1080x1920 recommended
+- Frame Rate: 30fps
+```
 
-## Environment Variables
+2. Visual Layer Structure
 
-Create a `.env` file in the project root with the following variables:
+```
+Top Third:
+- Static text overlay
+- Bold, white sans-serif font
+- Black outline for readability
+
+Center:
+- Main video content
+- Bright, slightly oversaturated colors
+- Mobile-optimized framing
+
+Bottom Third:
+- Dynamic captions
+- Branding elements
+- Motion B-roll elements
+```
+
+### System Requirements
+
+1. Local Development
 
 ```bash
-# Google Cloud Project settings
-GOOGLE_CLOUD_PROJECT=your-project-id
-GOOGLE_CLOUD_LOCATION=us-central1
-GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
+# Required Software
+- Python 3.12+
+- gcloud CLI tool
+- Firebase CLI
+- ffmpeg for video processing
 
-# Storage settings
-VIDEO_BUCKET=your-video-bucket-name
-
-# Firebase settings
-FIREBASE_PROJECT_ID=your-firebase-project-id
-FIREBASE_PRIVATE_KEY=your-firebase-private-key
-FIREBASE_CLIENT_EMAIL=your-firebase-client-email
-
-# Server settings
-PORT=8080
-DEBUG=True
+# Environment Setup
+export GOOGLE_APPLICATION_CREDENTIALS="path/to/service-account.json"
+export VIDEO_BUCKET="82ndrop-videos-staging-taajirah"  # for staging
 ```
 
-## API Endpoints
+2. Production Requirements
 
-### 1. Generate Video
-
-**Endpoint:** `POST /generate-video`
-
-**Request Body:**
-
-```json
-{
-  "prompt": "Your video prompt",
-  "user_id": "Firebase user ID",
-  "session_id": "Current session ID"
-}
+```
+- Vertex AI API enabled
+- Storage buckets configured
+- Service account with necessary permissions
 ```
 
-**Response:**
+### Error Handling
 
-```json
-{
-  "jobId": "operation-name",
-  "status": "processing",
-  "message": "Video generation started successfully"
-}
-```
-
-### 2. Check Video Status
-
-**Endpoint:** `GET /video-status/{job_id}`
-
-**Response:**
-
-```json
-{
-  "status": "processing|completed|error",
-  "progress": 50, // Only for processing status
-  "videoUrl": "gs://bucket/path/to/video.mp4", // Only for completed status
-  "error": "Error message" // Only for error status
-}
-```
-
-### 3. Cancel Video Generation
-
-**Endpoint:** `POST /cancel-video/{job_id}`
-
-**Response:**
-
-```json
-{
-  "status": "cancelled",
-  "message": "Video generation cancelled successfully"
-}
-```
-
-## Video Generation Parameters
-
-The video generation is configured with the following default parameters in the `generation_config`:
+1. Common Errors and Solutions
 
 ```python
-generation_config = {
-    "aspect_ratio": "9:16",  # vertical format for TikTok
-    "duration": 8,  # maximum allowed duration in seconds
-    "negative_prompt": "blurry, low quality, distorted, unrealistic",
-    "output_gcs_uri": "gs://{VIDEO_BUCKET}/users/{user_id}/sessions/{session_id}/"
-}
+# gcloud CLI Missing
+ERROR: [Errno 2] No such file or directory: 'gcloud'
+SOLUTION: Install Google Cloud SDK and ensure 'gcloud' is in PATH
+
+# Authentication Errors
+ERROR: Firebase token verification failed
+SOLUTION: Check token audience claim (must be "taajirah")
+
+# Vertex AI Errors
+ERROR: Get async operation failed
+SOLUTION: Verify operation ID format and existence
 ```
 
-## Storage Structure
-
-Generated videos are stored in Google Cloud Storage with the following path structure:
+2. Error Recovery Process
 
 ```
-gs://{VIDEO_BUCKET}/users/{user_id}/sessions/{session_id}/video.mp4
+1. Check system requirements
+2. Verify authentication
+3. Validate input parameters
+4. Monitor operation status
+5. Check fallback storage
 ```
 
-## Error Handling
+### Video Generation Process
 
-The API endpoints handle the following error cases:
+1. Request Format
 
-1. **Authentication Errors:**
-
-   - 401: User not authenticated
-   - 403: User not authorized
-
-2. **Input Validation Errors:**
-
-   - 400: Missing required fields
-   - 400: Invalid parameters
-
-3. **Processing Errors:**
-   - 500: Video generation failed
-   - 500: Operation status check failed
-   - 500: Operation cancellation failed
-
-## Logging
-
-The application logs important events with the following levels:
-
-- **INFO:** Operation progress, successful completions
-- **ERROR:** Failed operations, API errors
-- **DEBUG:** Detailed operation information (when DEBUG=True)
-
-## Security Considerations
-
-1. **Authentication:**
-
-   - All endpoints require Firebase authentication
-   - Users can only access their own videos
-   - Storage paths are scoped to user ID
-
-2. **Access Control:**
-
-   - Video generation is restricted to only whitelisted admin users (configured via Firebase custom claims)
-   - All endpoints are protected by FirebaseAuthMiddleware
-   - Users can only access their own videos
-   - Admin access is managed through Firebase custom claims ('agent_access' and 'video_admin' claims)
-
-3. **Resource Limits:**
-   - One video generation at a time per user
-   - Maximum video duration: 8 seconds
-   - Storage quota monitoring recommended
-
-## Testing
-
-For local development:
-
-1. Set up environment variables
-2. Run the FastAPI server: `uvicorn main:app --reload`
-3. Use the frontend application or test with curl:
-
-```bash
-# Generate video
-curl -X POST http://localhost:8080/generate-video \
-  -H "Authorization: Bearer $FIREBASE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"prompt":"test prompt","user_id":"uid","session_id":"sid"}'
-
-# Check status
-curl -X GET http://localhost:8080/video-status/{job_id} \
-  -H "Authorization: Bearer $FIREBASE_TOKEN"
-
-# Cancel generation
-curl -X POST http://localhost:8080/cancel-video/{job_id} \
-  -H "Authorization: Bearer $FIREBASE_TOKEN"
-```
-
-## Implementation Details
-
-The video generation uses Vertex AI's `GenerativeModel` class with the following key methods:
-
-1. **Generate Video:**
-
-```python
-model = GenerativeModel("veo-3")
-response = model.generate_content(
-    prompt=prompt,
-    generation_config={
-        "aspect_ratio": "9:16",
-        "duration": 8,
-        "negative_prompt": "blurry, low quality, distorted, unrealistic",
-        "output_gcs_uri": output_gcs_uri
+```json
+{
+  "prompt": {
+    "aspect_ratio": "9:16",
+    "duration": "30",
+    "layers": {
+      "top": {
+        "text": "Main Title",
+        "style": "bold, white, sans-serif"
+      },
+      "center": {
+        "content": "Main scene description",
+        "effects": "bright, oversaturated"
+      },
+      "bottom": {
+        "captions": ["0-3s: Caption 1", "3-7s: Caption 2"],
+        "branding": "@handle | #tags"
+      }
     }
-)
+  }
+}
 ```
 
-2. **Check Status:**
+2. Generation Pipeline
 
-```python
-response = model.get_content_task(job_id)
-if response.done:
-    if response.error:
-        # Handle error
-    else:
-        video_url = response.result.video_url
-        # Process video URL
+```mermaid
+sequenceDiagram
+    Client->>Backend: POST /generate-video
+    Backend->>VertexAI: Start Generation
+    VertexAI-->>Backend: Operation ID
+    Backend-->>Client: Operation ID
+    loop Status Check
+        Client->>Backend: GET /video-status/{id}
+        Backend->>VertexAI: Check Status
+        alt Success
+            Backend-->>Client: Video URL
+        else Processing
+            Backend-->>Client: Status Update
+        else Error
+            Backend-->>Client: Error Details
+        end
+    end
 ```
 
-The implementation follows Vertex AI's latest API for video generation, using the `generate_content` method with appropriate configuration parameters.
+### Best Practices
+
+1. Video Quality
+
+- Use high-quality source materials
+- Maintain consistent branding
+- Follow platform guidelines
+- Test on mobile devices
+
+2. Performance
+
+- Monitor API quotas
+- Implement request caching
+- Use appropriate video codecs
+- Optimize file sizes
+
+3. Error Prevention
+
+- Validate inputs thoroughly
+- Check system dependencies
+- Monitor API health
+- Implement proper logging
+
+### Testing Instructions
+
+1. Local Testing
+
+```bash
+# Start development server
+uvicorn main:app --reload --port 8000
+
+# Test video generation
+curl -X POST http://localhost:8000/generate-video \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @test-prompt.json
+```
+
+2. Integration Testing
+
+- Test with various prompt types
+- Verify error handling
+- Check video quality
+- Validate timing accuracy
+
+### Monitoring and Maintenance
+
+1. System Health Checks
+
+- API availability
+- Storage capacity
+- Error rates
+- Generation times
+
+2. Regular Tasks
+
+- Clean test videos
+- Update dependencies
+- Monitor quotas
+- Backup configurations
+
+## Required System Dependencies
+
+### Google Cloud SDK
+
+```bash
+# Installation required for video generation
+- Google Cloud SDK (gcloud CLI)
+- Properly configured gcloud auth
+- Vertex AI API enabled
+```
+
+### Installation Steps
+
+1. Install Google Cloud SDK:
+
+   ```bash
+   # macOS (using brew)
+   brew install google-cloud-sdk
+
+   # Debian/Ubuntu
+   sudo apt-get install google-cloud-sdk
+
+   # Manual download for other systems
+   # Visit: https://cloud.google.com/sdk/docs/install
+   ```
+
+2. Initialize and authenticate:
+
+   ```bash
+   gcloud init
+   gcloud auth application-default login
+   ```
+
+3. Set project and enable APIs:
+   ```bash
+   gcloud config set project taajirah
+   gcloud services enable aiplatform.googleapis.com
+   ```
+
+### Common Errors and Solutions
+
+1. "No such file or directory: 'gcloud'"
+
+   - **Cause**: Google Cloud SDK not installed or not in PATH
+   - **Solution**:
+     - Install Google Cloud SDK
+     - Add to PATH: export PATH=$PATH:/path/to/google-cloud-sdk/bin
+     - Restart your terminal
+
+2. Authentication Errors
+
+   - **Cause**: Not logged in or incorrect project
+   - **Solution**: Run `gcloud auth application-default login`
+
+3. API Errors
+   - **Cause**: Vertex AI API not enabled
+   - **Solution**: Enable via console or `gcloud services enable aiplatform.googleapis.com`

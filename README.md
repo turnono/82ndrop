@@ -24,17 +24,26 @@
 
 - **Modern UI**: Responsive design with mobile-first approach
 - **Real-time Chat**: Interactive chat interface with auto-scroll and typing indicators
-- **Authentication**: Firebase Auth integration with Google Sign-In
+- **Authentication**: Firebase Auth integration with Google Sign-In (audience: "taajirah")
 - **Progressive Web App**: Optimized for mobile and desktop usage
-- **Hosted on**: Firebase Hosting at https://82ndrop.web.app
+- **Hosted on**: Firebase Hosting
+  - Production: https://82ndrop.web.app
+  - Staging: https://82ndrop-staging.web.app
 
 ### Backend (FastAPI + Google ADK)
 
 - **AI Agent Framework**: Built with Google Agent Development Kit (ADK)
-- **Authentication Middleware**: Firebase ID token validation
+- **Authentication Middleware**: Firebase ID token validation with proper audience claim
 - **RESTful API**: Clean endpoints for chat, sessions, and user management
 - **Cloud Deployment**: Google Cloud Run with auto-scaling
 - **API URL**: https://drop-agent-service-855515190257.us-central1.run.app
+- **Video Storage**:
+  - Production: `gs://82ndrop-videos-taajirah`
+  - Staging/Other: `gs://82ndrop-videos-staging-taajirah` (default for local development)
+- **Environment Configuration**:
+  - Local development defaults to staging environment
+  - Video storage bucket selection based on `ENV` environment variable
+  - Staging is the default environment unless explicitly set to production
 
 ### AI Agent System
 
@@ -149,9 +158,9 @@ All visual layers should feel cinematic, coherent, and aligned with the TikTok 9
 ### Prerequisites
 
 - Node.js 18+
-- Python 3.11+
-- Google Cloud SDK
+- Python 3.12+
 - Firebase CLI
+- Google Cloud SDK
 
 ### Local Development
 
@@ -168,12 +177,21 @@ cd 82ndrop
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your Firebase config and Google Cloud credentials
+# Note: ENV=staging is the default for local development
 ```
 
-3. **Run the AI agent locally**
+3. **Run the backend locally**
 
 ```bash
-adk run drop_agent
+# Using make (recommended)
+make test-local  # This automatically sets ENV=staging
+
+# Or manually with environment variable
+ENV=staging uvicorn main:app --reload --port 8000
 ```
 
 4. **Set up frontend**
@@ -187,34 +205,37 @@ ng serve
 5. **Access the application**
 
 - Frontend: http://localhost:4200
-- Backend: http://localhost:8080
+- Backend: http://localhost:8000
+
+### Video Generation
+
+The application supports generating videos with the following configuration:
+
+- **Format**: 9:16 aspect ratio (vertical) optimized for TikTok/Reels
+- **Storage**: Videos are automatically stored in environment-specific buckets
+  - Local/Staging: `gs://82ndrop-videos-staging-taajirah`
+  - Production: `gs://82ndrop-videos-taajirah`
+- **Status Checking**: Built-in operation status monitoring with 15-second polling
+- **Error Handling**: Comprehensive error handling and status reporting
+- **Cleanup**: Automatic cleanup of completed operations
 
 ### Deployment
 
-The application is automatically deployed to:
+The application is automatically deployed via GitHub Actions to:
 
-- **Frontend**: https://82ndrop.web.app
+- **Frontend**:
+  - Production: https://82ndrop.web.app
+  - Staging: https://82ndrop-staging.web.app
 - **Backend**: https://drop-agent-service-855515190257.us-central1.run.app
 
-#### Deployment Commands
+⚠️ **Important**: All deployments must be performed through GitHub Actions workflows. Manual deployments using `make` commands are strictly prohibited.
 
-**For Firebase Authentication (Recommended):**
+#### Branch Protection Policy
 
-```bash
-# Development/Testing
-make deploy-gcloud
-
-# Production
-make deploy-production
-```
-
-**For ADK Authentication (Not recommended for this setup):**
-
-```bash
-make deploy
-```
-
-> **⚠️ Important**: Use `make deploy-gcloud` or `make deploy-production` for Firebase authentication. The `make deploy` command uses ADK authentication which is not compatible with our Firebase setup.
+- All changes must go through Pull Requests
+- Direct pushes to `master` and `staging` are blocked
+- Required status checks must pass
+- Only authorized users can approve/merge
 
 #### CORS Fix
 
@@ -230,6 +251,7 @@ The backend includes a custom CORS fix for ADK 1.5.0 compatibility. See [CORS Fi
 - Multi-agent workflow operational
 - Session management functional
 - Authentication and monitoring active
+- Environment-specific video storage configured
 
 ## 🤝 Contributing
 
@@ -249,16 +271,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Powered by Gemini 2.0 Flash
 - Master Prompt Template strategy implementation
 - Vertical-first mobile optimization approach
-
-# Branch Protection Policy
-
-Both `master` and `staging` branches are protected:
-
-- All changes must be merged via Pull Request (PR)
-- Only authorized users (see CODEOWNERS) can approve and merge
-- All required status checks (tests, deploys) must pass before merging
-- Direct pushes to these branches are blocked
-- Branch protection is enforced in GitHub Settings > Branches
 
 ---
 

@@ -1,327 +1,307 @@
 # 🧪 Testing Instructions for 82ndrop
 
-## Overview
+## Prerequisites
 
-82ndrop is an AI video composition generator built with Google's Agent Development Kit. This guide covers local testing, production testing, and verification procedures.
-
-## 🚀 Quick Start Testing
-
-### Prerequisites
-
-- Node.js 18+ and npm
 - Python 3.12+
+- Node.js 18+
 - Firebase CLI
-- Google Cloud SDK (optional for advanced testing)
-
-### 1. Local Development Testing
-
-#### Backend Setup
-
-```bash
-# Clone and navigate to project
-cd 82ndrop
-
-# Create Python virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Set up environment variables
-cp drop_agent/.env.example drop_agent/.env
-# Edit .env with your API keys and Firebase config
-
-# Start backend server
-python main.py
-```
-
-#### Frontend Setup
-
-```bash
-# Navigate to frontend directory
-cd frontend
-
-# Install dependencies
-npm install
-
-# Start development server
-npm start
-```
-
-#### Verify Local Setup
-
-1. Backend health check: `http://localhost:8080/health`
-2. Frontend: `http://localhost:4200`
-3. Check console for any errors
-
-### 2. Authentication Testing
-
-#### Google Sign-In Flow
-
-1. **Navigate to app** (local or production)
-2. **Click "Sign in with Google"**
-3. **Complete OAuth flow**
-4. **Verify successful redirect** to chat interface
-5. **Check user avatar** appears in header
-
-#### Firebase Token Validation
-
-```bash
-# Test with curl (replace TOKEN with actual Firebase token)
-curl -X POST http://localhost:8080/run \
-  -H "Authorization: Bearer YOUR_FIREBASE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "test video prompt"}'
-```
-
-### 3. Core Functionality Testing
-
-#### Multi-Agent Workflow Test
-
-1. **Sign in** to the application
-2. **Enter test prompt**: "Create a morning routine video for busy people"
-3. **Verify workflow progression**:
-   - Guide Agent analysis
-   - Search Agent trend enhancement
-   - Prompt Writer Agent composition generation
-4. **Check JSON output** contains:
-   - `composition` object with layer count
-   - `layers` array with proper structure
-   - `final_video` metadata
-
-#### Expected JSON Structure
+- Google Cloud SDK
+- Access to Firebase project
+- Access to Google Cloud project
 
-```json
-{
-  "composition": {
-    "layer_count": 3,
-    "canvas_type": "vertical_short_form",
-    "total_duration": "20-30 seconds",
-    "composition_style": "layered_content"
-  },
-  "layers": [
-    {
-      "layer_id": 1,
-      "layer_type": "text_overlay",
-      "position": "top_third",
-      "content_prompt": "...",
-      "visual_style": "...",
-      "duration": "...",
-      "z_index": 3
-    }
-  ],
-  "final_video": {
-    "title": "...",
-    "description": "...",
-    "hashtags": [...],
-    "call_to_action": "...",
-    "engagement_hook": "..."
-  }
-}
-```
+## 1. Environment Setup
 
-### 4. UI/UX Testing
+### Backend Setup
 
-#### Mobile Responsiveness
+1. **Create Virtual Environment**:
 
-1. **Open Chrome DevTools**
-2. **Toggle device emulation** (iPhone, Android)
-3. **Test core features**:
-   - Sign in flow
-   - Message input (should not zoom on iOS)
-   - Copy JSON functionality
-   - Navigation buttons
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
 
-#### Desktop Experience
+2. **Configure Environment**:
 
-1. **Test on desktop** (1200px+ width)
-2. **Verify enhanced features**:
-   - Larger typography and spacing
-   - Better layout proportions
-   - Enhanced chat interface
-   - Improved button sizing
+   ```bash
+   # Copy example env file
+   cp .env.example .env
 
-#### Copy Functionality
+   # Edit .env with your settings
+   GOOGLE_CLOUD_PROJECT=your-project-id
+   GOOGLE_CLOUD_LOCATION=us-central1
+   GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
+   ENV=staging  # Default for local development and testing
+   FIREBASE_PROJECT_ID=your-firebase-project-id
+   ```
 
-1. **Generate a video prompt**
-2. **Click "Copy JSON" button**
-3. **Verify button changes** to "✅ Copied!"
-4. **Paste content** elsewhere to confirm copy worked
-5. **Test on mobile** to ensure text selection works
+### Environment-Specific Testing
 
-### 5. Session Management Testing
+1. **Local Development/Testing**:
 
-#### New Session Creation
+   ```bash
+   # Using make (recommended)
+   make test-local  # Automatically uses staging environment
 
-1. **Generate a video prompt**
-2. **Click the "+" button** in header
-3. **Verify chat clears** and new session starts
-4. **Confirm previous conversation** is gone
+   # Or manually
+   ENV=staging python main.py
+   ```
 
-#### Back Navigation
+2. **Storage Testing**:
 
-1. **From chat interface**
-2. **Click back arrow** (top-left)
-3. **Verify navigation** to dashboard
-4. **Return to chat** and confirm session persists
+   ```bash
+   # Test video generation in staging
+   ENV=staging python main.py
 
-### 6. Error Handling Testing
+   # Verify videos are stored in:
+   gs://82ndrop-videos-staging-taajirah/users/{user_id}/sessions/{session_id}/videos/
+   ```
 
-#### Network Errors
+### Frontend Setup
 
-1. **Disconnect internet**
-2. **Try sending message**
-3. **Verify error handling** and user feedback
+1. **Install Dependencies**:
 
-#### Invalid Prompts
+   ```bash
+   cd frontend
+   npm install
+   ```
 
-1. **Send empty message** (should be disabled)
-2. **Send very long message** (test limits)
-3. **Send special characters** and emojis
+2. **Configure Environment**:
+   Update `src/environments/environment.ts`:
+   ```typescript
+   export const environment = {
+     production: false,
+     apiUrl: "http://localhost:8000",
+     firebase: {
+       // Your Firebase config
+       authDomain: "taajirah.firebaseapp.com", // Important for audience claim
+     },
+   };
+   ```
 
-#### Authentication Errors
+## 2. Authentication Testing
 
-1. **Clear browser storage**
-2. **Try accessing protected routes**
-3. **Verify redirect** to login
+### Local Testing
 
-### 7. Performance Testing
+1. **Start Services**:
 
-#### Load Testing
+   ```bash
+   # Terminal 1: Backend
+   uvicorn main:app --reload --port 8000
 
-1. **Send multiple rapid requests**
-2. **Monitor response times**
-3. **Check for memory leaks** in DevTools
+   # Terminal 2: Frontend
+   cd frontend && ng serve
+   ```
 
-#### Large Response Handling
+2. **Test Authentication Flow**:
 
-1. **Request complex video prompts**
-2. **Verify UI handles** large JSON responses
-3. **Test scroll performance** with many messages
+   - Navigate to http://localhost:4200
+   - Click "Sign in with Google"
+   - Verify successful authentication
+   - Check browser console for token
 
-### 8. Production Testing
+3. **Test API Authentication**:
+   ```bash
+   # Get token from browser
+   curl -X POST http://localhost:8000/run \
+     -H "Authorization: Bearer YOUR_FIREBASE_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"message": "test prompt"}'
+   ```
 
-#### Live Environment
+### Common Auth Issues
 
-- **URL**: `https://82ndrop.web.app`
-- **Test all core flows** as in local testing
-- **Verify HTTPS** and security headers
-- **Check Firebase Analytics** for tracking
+1. **Audience Claim Mismatch**:
 
-#### Cross-Browser Testing
+   - Error: "Firebase ID token has incorrect 'aud' claim"
+   - Fix: Ensure token audience is "taajirah"
 
-- **Chrome** (primary)
-- **Safari** (mobile focus)
-- **Firefox**
-- **Edge**
+2. **Invalid Token**:
 
-### 9. API Testing
+   - Error: "Token verification failed"
+   - Fix: Get fresh token from browser
 
-#### Direct Backend Testing
+3. **Missing Permissions**:
+   - Error: "User lacks required permissions"
+   - Fix: Grant necessary custom claims
 
-```bash
-# Health check
-curl https://your-backend-url/health
+## 3. Video Storage Testing
 
-# Authenticated request
-curl -X POST https://your-backend-url/run \
-  -H "Authorization: Bearer FIREBASE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Create a cooking video"}'
-```
+### Test Video Status Endpoint
 
-#### Agent Development Kit Testing
+1. **Valid Operation ID**:
 
-```bash
-# Test ADK integration
-python -c "
-from drop_agent.agent import create_agent
-agent = create_agent()
-print('ADK integration successful')
-"
-```
+   ```bash
+   curl -X GET "http://localhost:8000/video-status/8938233757571758123" \
+     -H "Authorization: Bearer YOUR_FIREBASE_TOKEN"
+   ```
 
-### 10. Security Testing
+   Expected: Returns video status or location
 
-#### Authentication
+2. **Invalid Operation ID**:
+   ```bash
+   curl -X GET "http://localhost:8000/video-status/invalid_id" \
+     -H "Authorization: Bearer YOUR_FIREBASE_TOKEN"
+   ```
+   Expected: Returns appropriate error
 
-- **JWT token validation**
-- **Session management**
-- **CORS configuration**
+### Test Storage Buckets
 
-#### Data Privacy
+1. **Production Bucket**:
 
-- **No sensitive data logging**
-- **Proper token handling**
-- **GDPR compliance**
+   - Location: `gs://82ndrop-videos-taajirah`
+   - Test with ENV=production
 
-## 🔧 Troubleshooting
+2. **Staging Bucket**:
+   - Location: `gs://82ndrop-videos-staging-taajirah`
+   - Test with ENV=staging
+
+## 4. Integration Testing
+
+### Frontend to Backend Integration
+
+1. **Chat Flow**:
+
+   - Start new chat session
+   - Send test message
+   - Verify response
+   - Check session persistence
+
+2. **Video Generation Flow**:
+   - Submit video generation request
+   - Check status updates
+   - Verify storage location
+   - Test video retrieval
+
+### Error Handling
+
+1. **Authentication Errors**:
+
+   - Test expired tokens
+   - Test invalid tokens
+   - Test missing tokens
+   - Verify error messages
+
+2. **API Errors**:
+   - Test invalid requests
+   - Test missing parameters
+   - Test rate limiting
+   - Verify error responses
+
+## 5. Deployment Testing
+
+### Staging Environment
+
+1. **Frontend**: https://82ndrop-staging.web.app
+
+   - Test authentication
+   - Test all features
+   - Verify CORS settings
+
+2. **Backend**: Staging Cloud Run instance
+   - Test API endpoints
+   - Verify environment variables
+   - Check logging/monitoring
+
+### Production Environment
+
+1. **Frontend**: https://82ndrop.web.app
+
+   - Verify authentication
+   - Test all features
+   - Check analytics
+
+2. **Backend**: https://drop-agent-service-855515190257.us-central1.run.app
+   - Test API endpoints
+   - Monitor performance
+   - Check error rates
+
+## 6. Security Testing
+
+### Authentication & Authorization
+
+1. **Token Validation**:
+
+   - Test token expiration
+   - Test audience claims
+   - Test custom claims
+
+2. **Access Control**:
+   - Test role-based access
+   - Test feature permissions
+   - Test admin functions
+
+### CORS & Security Headers
+
+1. **CORS Rules**:
+
+   - Test allowed origins
+   - Test blocked origins
+   - Test allowed methods
+
+2. **Security Headers**:
+   - Verify CORS headers
+   - Check CSP settings
+   - Test auth headers
+
+## 7. Monitoring & Logging
+
+### Local Logs
+
+1. **Backend Logs**:
+
+   - Check authentication logs
+   - Monitor API requests
+   - Track error rates
+
+2. **Frontend Logs**:
+   - Check console errors
+   - Monitor performance
+   - Track user actions
+
+### Production Monitoring
+
+1. **Cloud Logging**:
+
+   - Monitor error rates
+   - Track API usage
+   - Check authentication issues
+
+2. **Analytics**:
+   - Track user sessions
+   - Monitor feature usage
+   - Check error patterns
+
+## Troubleshooting Guide
 
 ### Common Issues
 
-#### "Firebase token verification failed"
+1. **Authentication Problems**:
 
-- Check `.env` file configuration
-- Verify service account JSON file
-- Ensure proper Firebase project setup
+   - Check token audience ("taajirah")
+   - Verify Firebase config
+   - Check service account
 
-#### "Module not found" errors
+2. **API Issues**:
 
-- Reinstall dependencies: `pip install -r requirements.txt`
-- Check Python virtual environment activation
+   - Verify endpoints
+   - Check CORS settings
+   - Validate requests
 
-#### Frontend build errors
+3. **Storage Issues**:
+   - Check bucket permissions
+   - Verify environment
+   - Check file paths
 
-- Clear node_modules: `rm -rf node_modules && npm install`
-- Check Angular CLI version compatibility
+### Getting Help
 
-#### Agent workflow failures
+1. **Documentation**:
 
-- Verify API keys in `.env`
-- Check Google Cloud project permissions
-- Review ADK configuration
+   - Check this guide
+   - Review other docs
+   - Check Firebase docs
 
-### Debug Mode
-
-```bash
-# Enable debug logging
-export DEBUG=true
-python main.py
-
-# Frontend debug
-ng serve --verbose
-```
-
-## 📊 Test Checklist
-
-### Pre-Deployment
-
-- [ ] All unit tests pass
-- [ ] Authentication flow works
-- [ ] Multi-agent workflow completes
-- [ ] JSON output validates
-- [ ] Mobile responsiveness verified
-- [ ] Copy functionality works
-- [ ] Error handling tested
-- [ ] Performance acceptable
-
-### Post-Deployment
-
-- [ ] Production URL accessible
-- [ ] SSL certificate valid
-- [ ] Firebase Analytics working
-- [ ] All core features functional
-- [ ] Cross-browser compatibility
-- [ ] Mobile app performance
-
-## 📞 Support
-
-For testing issues:
-
-1. Check console logs (browser and server)
-2. Verify environment configuration
-3. Test with minimal example
-4. Review error messages carefully
-
-**Happy Testing! 🚀**
+2. **Support**:
+   - File GitHub issues
+   - Contact team lead
+   - Check error logs

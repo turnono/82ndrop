@@ -15,9 +15,18 @@ from vertexai.generative_models import GenerativeModel
 import json
 import google.generativeai as genai
 import requests
+from google import genai
+from google.genai.types import GenerateVideosConfig
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Set up environment variables for google.genai
+os.environ["GOOGLE_CLOUD_PROJECT"] = os.getenv("GOOGLE_CLOUD_PROJECT")
+os.environ["GOOGLE_CLOUD_LOCATION"] = "global"
+os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "True"
 
 # Initialize Firebase Admin SDK
 def initialize_firebase():
@@ -105,61 +114,69 @@ async def generate_video(request: Request):
         # Get request body
         body = await request.json()
         prompt = body.get("prompt")
-        user_id = body.get("user_id")
+        user_id = body.get("user_id", user.get('user_id'))  # Default to authenticated user's ID
         session_id = body.get("session_id")
 
         if not prompt:
             raise HTTPException(status_code=400, detail="Prompt is required")
+        if not session_id:
+            raise HTTPException(status_code=400, detail="session_id is required")
 
-        # Get access token using gcloud
-        import subprocess
-        access_token = subprocess.check_output(["gcloud", "auth", "print-access-token"]).decode().strip()
+        # Initialize Google GenAI client
+        client = genai.Client()
 
-        # Generate video using Veo 3.0
-        request_body = {
-            "instances": [
-                {
-                    "prompt": prompt
-                }
-            ],
-            "parameters": {
-                "storageUri": f"gs://{get_video_bucket()}/users/{user_id}/sessions/{session_id}/",
-                "durationSeconds": 8,
-                "aspectRatio": "16:9",
-                "sampleCount": 1
+        # Set up GCS output path
+        bucket = get_video_bucket()
+        output_gcs_uri = f"gs://{bucket}/users/{user_id}/sessions/{session_id}/videos/"
+
+        # Log the request details
+        logger.info(f"Starting video generation for user {user_id}, session {session_id}")
+        logger.info(f"Output GCS URI: {output_gcs_uri}")
+
+        try:
+            # Generate video
+            operation = client.models.generate_videos(
+                model="veo-3.0-generate-preview",
+                prompt=prompt,
+                config=genai.types.GenerateVideosConfig(
+                    aspect_ratio="16:9",  # Vertical video for TikTok
+                    output_gcs_uri=output_gcs_uri,
+                ),
+            )
+
+            # Store operation in memory for status checks
+            operation_id = operation.name
+            operations[operation_id] = {
+                'operation': operation,  # Store the actual operation object
+                'user_id': user_id,
+                'session_id': session_id,
+                'created_at': datetime.now().isoformat(),
+                'status': 'in_progress'
             }
-        }
 
-        # Get the model endpoint
-        project_id = os.getenv('GOOGLE_CLOUD_PROJECT')
-        endpoint = f"https://us-central1-aiplatform.googleapis.com/v1/projects/{project_id}/locations/us-central1/publishers/google/models/veo-3.0-generate-preview:predictLongRunning"
+            # Log operation details
+            logger.info(f"Started video generation operation: {operation_id}")
 
-        # Make the API request
-        response = requests.post(
-            endpoint,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
-            },
-            json=request_body
-        )
+            return {
+                "operation_name": operation_id,
+                "status": "in_progress",
+                "user_id": user_id,
+                "session_id": session_id,
+                "created_at": operations[operation_id]['created_at']
+            }
 
-        if not response.ok:
-            logging.error(f"Error from Vertex AI: {response.text}")
-            raise HTTPException(status_code=response.status_code, detail=response.text)
+        except Exception as e:
+            logger.error(f"Error in GenAI client operation: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Video generation failed: {str(e)}")
 
-        operation = response.json()
-        operation_name = operation.get("name", "")
-
-        # Return operation name for status checking
-        return {
-            "operation_id": operation_name,
-            "status": "processing"
-        }
-
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        logging.error(f"Error generating video: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error generating video: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+# Dictionary to store operations with additional metadata
+operations = {}
 
 def get_video_bucket():
     """Get the appropriate GCS bucket based on environment."""
@@ -176,114 +193,92 @@ async def check_video_status(operation_name: str, request: Request):
         if not user:
             raise HTTPException(status_code=401, detail="User not authenticated")
 
-        # Extract operation ID from the full name if provided
-        operation_id = operation_name.split('/')[-1] if '/' in operation_name else operation_name
+        # Get operation data from memory
+        operation_data = operations.get(operation_name)
+        if not operation_data:
+            raise HTTPException(status_code=404, detail="Operation not found")
+
+        # Get the operation object
+        operation = operation_data['operation']
         
-        # Construct full operation name if only ID is provided
-        project_id = os.getenv('GOOGLE_CLOUD_PROJECT')
-        full_operation_name = operation_name if '/' in operation_name else f"projects/{project_id}/locations/us-central1/publishers/google/models/veo-3.0-generate-preview/operations/{operation_id}"
-
-        # Get access token using gcloud
-        import subprocess
-        access_token = subprocess.check_output(["gcloud", "auth", "print-access-token"]).decode().strip()
-
-        # Make the API request to check operation status using fetchPredictOperation
-        endpoint = f"https://us-central1-aiplatform.googleapis.com/v1/projects/{project_id}/locations/us-central1/publishers/google/models/veo-3.0-generate-preview:fetchPredictOperation"
-
-        # Make the API request
-        response = requests.post(
-            endpoint,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "operationName": full_operation_name
-            }
-        )
-
-        if not response.ok:
-            logging.error(f"Error from Vertex AI: {response.text}")
-            if response.status_code == 404:
-                # If operation not found in Vertex AI, check GCS directly
+        try:
+            # Initialize Google GenAI client
+            client = genai.Client()
+            
+            # Update operation status
+            if not operation.done:
+                # Sleep for 15 seconds as per docs
+                time.sleep(15)
+                operation = client.operations.get(operation)
+                operation_data['operation'] = operation  # Update stored operation
+            
+            # Check if operation is done
+            if operation.done:
                 try:
-                    # Initialize storage client
-                    from google.cloud import storage
-                    storage_client = storage.Client()
-                    bucket_name = get_video_bucket()
-                    bucket = storage_client.bucket(bucket_name)
-                    
-                    # Check test directory first
-                    blob = bucket.blob(f"test/{operation_id}/sample_0.mp4")
-                    if blob.exists():
-                        video_uri = f"gs://{bucket_name}/test/{operation_id}/sample_0.mp4"
-                        logging.info(f"Found video in GCS test directory: {video_uri}")
+                    if operation.error:
+                        # Operation failed
+                        error_msg = str(operation.error)
+                        operations.pop(operation_name, None)  # Clean up
                         return {
-                            "status": "completed",
-                            "video_uri": video_uri
+                            "status": "failed",
+                            "error": error_msg,
+                            "operation_name": operation_name,
+                            "user_id": operation_data['user_id'],
+                            "session_id": operation_data['session_id'],
+                            "created_at": operation_data['created_at']
                         }
                     
-                    # Check lake_scene directory
-                    blob = bucket.blob(f"lake_scene/{operation_id}/sample_0.mp4")
-                    if blob.exists():
-                        video_uri = f"gs://{bucket_name}/lake_scene/{operation_id}/sample_0.mp4"
-                        logging.info(f"Found video in GCS lake_scene directory: {video_uri}")
+                    # Operation succeeded
+                    if operation.response and operation.result.generated_videos:
+                        video_uri = operation.result.generated_videos[0].video.uri
+                        operations.pop(operation_name, None)  # Clean up
                         return {
                             "status": "completed",
-                            "video_uri": video_uri
+                            "video_uri": video_uri,
+                            "operation_name": operation_name,
+                            "user_id": operation_data['user_id'],
+                            "session_id": operation_data['session_id'],
+                            "created_at": operation_data['created_at']
                         }
-                        
-                    logging.info(f"Video not found in GCS for operation {operation_id}")
+                    else:
+                        raise ValueError("No video generated in the result")
                 except Exception as e:
-                    logging.error(f"Error checking GCS: {str(e)}")
-                
+                    logger.error(f"Error processing completed operation: {str(e)}")
+                    operations.pop(operation_name, None)  # Clean up
+                    return {
+                        "status": "error",
+                        "error": f"Failed to process completed operation: {str(e)}",
+                        "operation_name": operation_name,
+                        "user_id": operation_data['user_id'],
+                        "session_id": operation_data['session_id'],
+                        "created_at": operation_data['created_at']
+                    }
+            else:
+                # Operation still in progress
                 return {
-                    "status": "not_found",
-                    "error": "Operation not found or expired"
+                    "status": "in_progress",
+                    "operation_name": operation_name,
+                    "user_id": operation_data['user_id'],
+                    "session_id": operation_data['session_id'],
+                    "created_at": operation_data['created_at']
                 }
-            raise HTTPException(status_code=response.status_code, detail=response.text)
 
-        operation = response.json()
-        logging.info(f"Operation response: {operation}")
-
-        # Check if operation is done
-        if operation.get("done"):
-            if "error" in operation:
-                return {
-                    "status": "error",
-                    "error": operation["error"].get("message", "Unknown error")
-                }
-            
-            if "response" in operation:
-                prediction = operation.get("response", {})
-                logging.info(f"Prediction response: {prediction}")
-                
-                if "videos" in prediction:
-                    videos = prediction["videos"]
-                    if videos:
-                        video_uri = videos[0].get("gcsUri")
-                        logging.info(f"Found video URI in response: {video_uri}")
-                        return {
-                            "status": "completed",
-                            "video_uri": video_uri
-                        }
-            
+        except Exception as e:
+            logger.error(f"Error getting operation status: {str(e)}")
             return {
                 "status": "error",
-                "error": "No video found in response"
+                "error": f"Failed to get operation status: {str(e)}",
+                "operation_name": operation_name,
+                "user_id": operation_data['user_id'],
+                "session_id": operation_data['session_id'],
+                "created_at": operation_data['created_at']
             }
 
-        # Operation is still in progress
-        metadata = operation.get("metadata", {})
-        logging.info(f"Operation in progress. Metadata: {metadata}")
-        return {
-            "status": "processing",
-            "metadata": metadata
-        }
-
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        logging.error(f"Error checking video status: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error checking video status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.post("/cancel-video/{operation_name}")
 async def cancel_video_generation(operation_name: str, request: Request):
@@ -293,36 +288,51 @@ async def cancel_video_generation(operation_name: str, request: Request):
         if not user:
             raise HTTPException(status_code=401, detail="User not authenticated")
 
-        # Get access token using gcloud
-        import subprocess
-        access_token = subprocess.check_output(["gcloud", "auth", "print-access-token"]).decode().strip()
+        # Get operation data from memory
+        operation_data = operations.get(operation_name)
+        if not operation_data:
+            raise HTTPException(status_code=404, detail="Operation not found")
 
-        # Make the API request to cancel operation
-        endpoint = f"https://us-central1-aiplatform.googleapis.com/v1/{operation_name}:cancel"
-
-        # Make the API request
-        response = requests.post(
-            endpoint,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
+        # Initialize Google GenAI client
+        client = genai.Client()
+        
+        try:
+            # Get latest operation status
+            operation = client.operations.get(name=operation_name)
+            
+            # Try to cancel the operation
+            operation.cancel()
+            
+            # Clean up operation from memory
+            operations.pop(operation_name, None)
+            
+            return {
+                "status": "cancelled",
+                "operation_name": operation_name,
+                "user_id": operation_data['user_id'],
+                "session_id": operation_data['session_id'],
+                "created_at": operation_data['created_at'],
+                "message": "Video generation cancelled successfully"
             }
-        )
+            
+        except Exception as e:
+            logger.error(f"Error cancelling operation: {str(e)}")
+            # Clean up operation from memory even if cancel fails
+            operations.pop(operation_name, None)
+            return {
+                "status": "error",
+                "error": f"Failed to cancel operation: {str(e)}",
+                "operation_name": operation_name,
+                "user_id": operation_data['user_id'],
+                "session_id": operation_data['session_id'],
+                "created_at": operation_data['created_at']
+            }
 
-        if not response.ok:
-            if response.status_code == 404:
-                raise HTTPException(status_code=404, detail="Operation not found")
-            logging.error(f"Error from Vertex AI: {response.text}")
-            raise HTTPException(status_code=response.status_code, detail=response.text)
-
-        return {
-            "status": "cancelled",
-            "message": "Video generation cancelled successfully"
-        }
-
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        logging.error(f"Error in cancel_video_generation: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error in cancel request: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000) 
