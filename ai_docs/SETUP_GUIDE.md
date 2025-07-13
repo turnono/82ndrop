@@ -1,254 +1,273 @@
-# Quick Guide: Building a Hierarchical Agent System with ADK
+# 82ndrop Setup Guide
 
-This guide provides a template for setting up a modular, multi-agent AI system similar to `sim-memory`, using the Google Agent Development Kit (ADK). The goal is to create a structure that you can easily "plug into" another project.
+## Prerequisites
 
-## Core Idea: A Team of Specialists
+1. Google Cloud Project with:
 
-Instead of one monolithic agent, we create a "team" of agents.
+   - Vertex AI API enabled
+   - Firebase project configured
+   - Service account with necessary permissions
 
-1.  A **Root Agent** (or "manager") that acts as the primary coordinator.
-2.  Multiple **Sub-Agents** (or "specialists"), each with a specific domain of expertise (e.g., memory, business analysis, web search).
+2. Development Tools:
+   - Python 3.12+
+   - Node.js 18+
+   - Firebase CLI
+   - Google Cloud SDK
 
-The Root Agent's main job is to understand a user's request and delegate it to the correct Sub-Agent.
+## Environment Setup
 
-## 1. Project Structure Blueprint
+### 1. Backend Configuration
 
-Here is the essential directory structure you can replicate:
-
-```
-your_project_name/
-├── main.py                     # Main application entry point
-├── requirements.txt
-├── .env                        # Environment variables
-│
-└── your_agent_package/         # Your main agent Python package
-    ├── __init__.py
-    ├── agent.py                # Defines the Root Agent
-    ├── prompts.py              # Prompts for the Root Agent
-    ├── services.py             # Configuration for memory/session services
-    │
-    └── sub_agents/             # Directory for specialist agents
-        ├── __init__.py
-        │
-        ├── memory_manager/
-        │   ├── __init__.py
-        │   ├── agent.py
-        │   └── prompt.py
-        │
-        └── another_specialist/
-            ├── __init__.py
-            ├── agent.py
-            ├── prompt.py
-            └── tools/
-                ├── __init__.py
-                └── custom_tools.py
-```
-
-## 2. Step-by-Step Setup
-
-### Step 1: Environment and Dependencies
-
-Create a `requirements.txt` file with the core dependency:
-
-```txt
-# requirements.txt
-google-cloud-aiplatform
-google-adk
-```
-
-Then, set up your environment:
+Create a `.env` file in the project root:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+# Google Cloud settings
+GOOGLE_CLOUD_PROJECT=your-project-id
+GOOGLE_CLOUD_LOCATION=us-central1
+GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
+
+# Environment settings
+ENV=staging  # Use 'staging' for local development (default if not set)
+
+# Firebase settings
+FIREBASE_PROJECT_ID=your-firebase-project-id
+```
+
+### 2. Video Storage Configuration
+
+The application uses environment-specific Google Cloud Storage buckets:
+
+```bash
+# Staging/Local Development (default)
+gs://82ndrop-videos-staging-taajirah
+
+# Production
+gs://82ndrop-videos-taajirah
+```
+
+The bucket selection is automatic based on the `ENV` environment variable:
+
+- If `ENV=production`: Uses production bucket
+- All other cases (including unset): Uses staging bucket
+
+For local development:
+
+- The staging bucket is used by default
+- This is enforced by the `make test-local` command
+- You can also set it manually: `ENV=staging python main.py`
+
+### 2. Firebase Setup
+
+1. **Create Firebase Project**:
+
+   - Go to Firebase Console
+   - Create new project or use existing
+   - Enable Google Authentication
+   - Set up Realtime Database
+
+2. **Configure Authentication**:
+
+   - Enable Google Sign-in in Firebase Console
+   - Set proper audience claim ("taajirah")
+   - Configure authorized domains
+
+3. **Set Up Service Account**:
+
+   ```bash
+   # Create service account
+   gcloud iam service-accounts create firebase-admin-sa \
+       --description="Firebase Admin SDK Service Account" \
+       --display-name="Firebase Admin SA"
+
+   # Grant necessary permissions
+   gcloud projects add-iam-policy-binding your-project-id \
+       --member="serviceAccount:firebase-admin-sa@your-project-id.iam.gserviceaccount.com" \
+       --role="roles/firebase.admin"
+
+   # Download key
+   gcloud iam service-accounts keys create firebase-admin-key.json \
+       --iam-account=firebase-admin-sa@your-project-id.iam.gserviceaccount.com
+   ```
+
+## Local Development Setup
+
+### Prerequisites
+
+- Python 3.12+
+- Service account JSON file (`taajirah-agents-service-account.json`) in project root
+- Uvicorn server
+
+### Running Locally
+
+1. Install dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
 
-### Step 2: Define a Sub-Agent (Specialist)
+2. Start the development server:
 
-It's easiest to start with a specialist. Let's create a simple `web_search_agent`.
-
-**`your_agent_package/sub_agents/web_search/prompt.py`**:
-
-```python
-DESCRIPTION = "Specialist agent for performing web searches using Google Search"
-INSTRUCTION = "You are a web search specialist. Your role is to find current, accurate information from the web. Use your search tool to answer the user's query."
+```bash
+uvicorn main:app --reload --port 8000
 ```
 
-**`your_agent_package/sub_agents/web_search/agent.py`**:
+The server will run at http://127.0.0.1:8000 with hot-reload enabled.
 
-```python
-from google.adk import Agent
-from google.adk.tools import google_search
-from .prompt import DESCRIPTION, INSTRUCTION
+## Vertex AI Integration
 
-web_search_agent = Agent(
-    name="web_search_agent",
-    model="gemini-2.0-flash", # A model that supports built-in tools
-    description=DESCRIPTION,
-    instruction=INSTRUCTION,
-    tools=[google_search],
-)
-```
+The system uses Google's Vertex AI Veo 3.0 Generate Preview model for video generation:
 
-### Step 3: Define the Root Agent (Manager)
-
-The Root Agent's job is to delegate. You must instruct it to do so in its prompt.
-
-**`your_agent_package/prompts.py`**:
-
-```python
-PROMPT = """You are the root agent. You have a team of specialists.
-Your job is to understand the user's request and delegate to the correct specialist.
-
-- For questions about current events or real-time information, use the 'web_search_agent'.
-
-When you delegate, the specialist will handle the task.
-"""
-```
-
-**`your_agent_package/agent.py`**:
-
-```python
-from google.adk import Agent
-from google.adk.tools.agent_tool import AgentTool
-from .prompts import PROMPT
-
-# Import your sub-agent(s)
-from .sub_agents.web_search.agent import web_search_agent
-
-root_agent = Agent(
-    name="root_agent",
-    model="gemini-2.0-flash",
-    instruction=PROMPT,
-    # ADK uses AgentTool to wrap a sub-agent so it can be called like a tool
-    tools=[
-        AgentTool(agent=web_search_agent),
-    ],
-)
-```
-
-_Note_: For sub-agents with built-in tools like `google_search`, they must be exposed to the root agent as an `AgentTool`. For other sub-agents with custom tools, you can add them to the `sub_agents` list instead.
-
-### Step 4: Configure Services
-
-Create a file to handle the setup of ADK's session and memory services.
-
-**`your_agent_package/services.py`**:
-
-```python
-import os
-import vertexai
-from google.adk.sessions import VertexAiSessionService
-from google.adk.memory import InMemoryMemoryService # Or VertexAiRagMemoryService
-from google.adk.runners import Runner
-
-# --- Configuration ---
-PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT")
-LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
-APP_NAME = "my_hierarchical_app"
-
-_runner = None
-
-def get_runner():
-    """Initializes and returns the ADK Runner."""
-    global _runner
-    if _runner is None:
-        # 1. Initialize Vertex AI
-        vertexai.init(project=PROJECT_ID, location=LOCATION)
-
-        # 2. Choose your services
-        session_service = VertexAiSessionService()
-        memory_service = InMemoryMemoryService() # Simple in-memory, no setup needed
-
-        # 3. Import your root agent
-        from .agent import root_agent
-
-        # 4. Create the Runner
-        _runner = Runner(
-            app_name=APP_NAME,
-            agent=root_agent,
-            session_service=session_service,
-            memory_service=memory_service,
-        )
-        print("Runner initialized successfully.")
-    return _runner
-```
-
-### Step 5: Create the Entry Point
-
-Finally, create the `main.py` file that starts the application. This file can be a simple command-line interface for testing.
-
-**`main.py`**:
-
-```python
-import os
-import asyncio
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-# Import the runner from your package
-from your_agent_package.services import get_runner
-
-async def main():
-    """A simple REPL to interact with the agent."""
-    runner = get_runner()
-    user_id = "test-user"
-    session_id = None # Let the runner create a new session
-
-    print("Agent is ready. Type 'exit' to quit.")
-    while True:
-        user_input = input("You: ")
-        if user_input.lower() == "exit":
-            break
-
-        # This is the main interaction point
-        response = await runner.run(
-            user_id=user_id,
-            session_id=session_id,
-            new_message=user_input,
-        )
-
-        # The first time we run, we get the session_id
-        if session_id is None:
-            session_id = response.session.id
-
-        # Print the agent's final response
-        print(f"Agent: {response.content}")
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nExiting...")
+### Operation Status Format
 
 ```
+projects/taajirah/locations/us-central1/publishers/google/models/veo-3.0-generate-preview/operations/{operation_id}
+```
 
-### Step 6: Run It!
+### Error Handling
 
-1.  Create a `.env` file in your root directory:
-    ```
-    GOOGLE_CLOUD_PROJECT="your-gcp-project-id"
-    GOOGLE_CLOUD_LOCATION="us-central1"
-    ```
-2.  Run the application:
-    ```bash
-    python main.py
-    ```
+- 404: Operation not found errors are properly logged and handled
+- Video status checks fallback to GCS bucket inspection
+- Videos are stored in environment-specific buckets (staging/production)
 
-You now have a working, hierarchical agent system.
+## Authentication Details
 
-## How to "Plug Into" Another Project
+### Firebase Token Validation
 
-Because the entire agent logic is contained within the `your_agent_package/` directory, you can treat it as a self-contained module.
+- Audience claim must be "taajirah"
+- Invalid tokens result in 401 Unauthorized responses
+- Descriptive error messages for debugging authentication issues
 
-In another project, you could simply:
+### Common Authentication Errors
 
-1.  Copy the `your_agent_package/` directory into your new project.
-2.  Ensure the dependencies from `requirements.txt` are installed.
-3.  Import the `get_runner` function from `your_agent_package.services` and use `await runner.run(...)` to interact with the agent system, just like in `main.py`.
+- Incorrect audience claim (e.g., using "taajirah-agents" instead of "taajirah")
+- Missing or expired tokens
+- Invalid token format
 
-This structure provides a clean separation between the agent's complex internal logic and the application that uses it.
+## Local Development
+
+### Backend Setup
+
+1. **Create Virtual Environment**:
+
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   ```
+
+2. **Install Dependencies**:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Run Backend**:
+   ```bash
+   uvicorn main:app --reload --port 8000
+   ```
+
+### Frontend Setup
+
+1. **Install Dependencies**:
+
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+2. **Configure Environment**:
+
+   - Update `src/environments/environment.ts`
+   - Set proper API URLs and Firebase config
+
+3. **Run Frontend**:
+   ```bash
+   ng serve
+   ```
+
+## Deployment
+
+⚠️ **Important**: All deployments must be performed through GitHub Actions workflows.
+
+### GitHub Actions Workflows
+
+1. **Production Deployment**:
+
+   - Triggered on push to `master`
+   - Deploys to:
+     - Frontend: https://82ndrop.web.app
+     - Backend: https://drop-agent-service-855515190257.us-central1.run.app
+     - Video Storage: gs://82ndrop-videos-taajirah
+
+2. **Staging Deployment**:
+   - Triggered on PR to `staging`
+   - Deploys to:
+     - Frontend: https://82ndrop-staging.web.app
+     - Backend: Staging Cloud Run instance
+     - Video Storage: gs://82ndrop-videos-staging-taajirah
+
+### Branch Protection Rules
+
+1. **Protected Branches**:
+
+   - `master` (production)
+   - `staging`
+
+2. **Rules**:
+   - All changes via Pull Requests
+   - Required status checks must pass
+   - Only authorized users can approve/merge
+   - Direct pushes blocked
+
+## Testing
+
+### Authentication Testing
+
+1. **Local Testing**:
+
+   ```bash
+   # Get Firebase token from browser
+   # Test API with token
+   curl -X POST http://localhost:8000/run \
+     -H "Authorization: Bearer YOUR_FIREBASE_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"message": "test prompt"}'
+   ```
+
+2. **Production Testing**:
+   - Use real Firebase tokens
+   - Verify proper audience claim ("taajirah")
+   - Test both staging and production environments
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Authentication Errors**:
+
+   - Verify Firebase token audience claim is "taajirah"
+   - Check service account permissions
+   - Ensure proper environment variables
+
+2. **Deployment Issues**:
+   - Check GitHub Actions logs
+   - Verify secrets are properly set
+   - Ensure branch protection rules are followed
+
+## Security Notes
+
+1. **Authentication**:
+
+   - Always use Firebase tokens
+   - Never modify authentication logic
+   - Maintain proper audience claims
+
+2. **Deployment**:
+
+   - Never deploy manually
+   - Always use GitHub Actions
+   - Follow branch protection rules
+
+3. **Environment Variables**:
+   - Keep secrets in GitHub Secrets
+   - Use environment-specific variables
+   - Never commit sensitive data

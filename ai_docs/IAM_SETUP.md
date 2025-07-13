@@ -2,6 +2,162 @@
 
 This guide shows how to set up Google Cloud IAM permissions so that users authenticated through your Taajirah Firebase project can access the 82ndrop agent system.
 
+## IAM and Service Account Configuration
+
+### Service Account Setup
+
+1. Main Service Account
+
+```
+Name: taajirah-agents-service-account.json
+Location: Project root directory
+Purpose: Firebase authentication and Vertex AI operations
+```
+
+### Required Permissions
+
+1. Firebase Admin SDK
+
+- `firebase.auth.admin` - Verify Firebase ID tokens
+- `firebase.projects.get` - Access project configuration
+
+2. Vertex AI
+
+- `aiplatform.endpoints.predict` - Access Veo 3.0 model
+- `aiplatform.operations.get` - Check operation status
+
+3. Google Cloud Storage
+
+- `storage.objects.create` - Upload generated videos
+- `storage.objects.get` - Read video files
+- `storage.objects.list` - List bucket contents
+
+### Environment Configuration
+
+1. Production Environment
+
+```
+Project: taajirah
+Region: us-central1
+Storage Bucket: 82ndrop-videos-taajirah
+```
+
+2. Staging Environment
+
+```
+Project: taajirah
+Region: us-central1
+Storage Bucket: 82ndrop-videos-staging-taajirah
+```
+
+### Service Account Initialization
+
+1. Backend Service
+
+```python
+# Service account loading
+try:
+    firebase_admin.initialize_app(
+        credentials.Certificate('taajirah-agents-service-account.json')
+    )
+    print("Firebase initialized with service account")
+except Exception as e:
+    print(f"Error initializing Firebase: {e}")
+```
+
+### Security Best Practices
+
+1. Service Account Management
+
+- Store service account key securely
+- Regular key rotation
+- Limit service account permissions
+- Use separate accounts for different environments
+
+2. Access Control
+
+- Follow principle of least privilege
+- Regular permission audits
+- Monitor service account usage
+- Remove unused permissions
+
+3. Environment Isolation
+
+- Separate service accounts per environment
+- Different storage buckets per environment
+- Proper IAM bindings per environment
+
+### Common Issues and Solutions
+
+1. Authentication Failures
+
+```
+Error: Firebase ID token has incorrect "aud" (audience) claim
+Solution: Verify service account is from correct Firebase project
+```
+
+2. Permission Issues
+
+```
+Error: Permission denied accessing storage bucket
+Solution: Check IAM roles and bucket permissions
+```
+
+### Monitoring and Maintenance
+
+1. Regular Tasks
+
+- Key rotation schedule
+- Permission audits
+- Usage monitoring
+- Access reviews
+
+2. Security Monitoring
+
+- Failed authentication attempts
+- Unauthorized access attempts
+- Service account key usage
+- Resource access patterns
+
+### Deployment Checklist
+
+1. Service Account Setup
+
+- [ ] Create service account
+- [ ] Assign required roles
+- [ ] Download and secure key file
+- [ ] Configure application
+
+2. Permission Verification
+
+- [ ] Test Firebase authentication
+- [ ] Verify Vertex AI access
+- [ ] Check storage permissions
+- [ ] Validate environment isolation
+
+3. Security Review
+
+- [ ] Audit permissions
+- [ ] Review security settings
+- [ ] Check access controls
+- [ ] Verify monitoring setup
+
+### Emergency Procedures
+
+1. Key Compromise
+
+- Immediately revoke compromised key
+- Generate new service account key
+- Update application configuration
+- Review security logs
+
+2. Access Issues
+
+- Check IAM permissions
+- Verify service account status
+- Review recent changes
+- Check quota limits
+
 ## 🏗️ Architecture Overview
 
 ```

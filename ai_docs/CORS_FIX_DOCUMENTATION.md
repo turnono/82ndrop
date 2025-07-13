@@ -1,123 +1,90 @@
 # CORS Fix Documentation
 
-## Problem
+## CORS Configuration
 
-ADK 1.5.0 has a bug where OPTIONS requests (CORS preflight) return 405 "Method Not Allowed" instead of proper CORS headers. This prevents browsers from making authenticated requests to session endpoints.
+### Allowed Origins
 
-## Error Symptoms
+#### Production Environment
 
-```
-Access to XMLHttpRequest at 'https://drop-agent-service-855515190257.us-central1.run.app/apps/drop_agent/users/.../sessions'
-from origin 'https://82ndrop.web.app' has been blocked by CORS policy:
-Response to preflight request doesn't pass access control check:
-No 'Access-Control-Allow-Origin' header is present on the requested resource.
-```
+- Frontend: `https://82ndrop.web.app`
+- Staging: `https://82ndrop-staging.web.app`
 
-## Solution
+#### Development Environment
 
-Added a custom OPTIONS handler in `main.py` to work around the ADK bug:
+- Local Frontend: `http://localhost:4200` (Angular default)
+- Local Backend: `http://127.0.0.1:8000` (Uvicorn default)
 
-```python
-# Custom OPTIONS handler to fix ADK CORS bug
-@app.options("/{full_path:path}")
-async def options_handler(request: Request):
-    """Handle OPTIONS requests for CORS preflight"""
-    origin = request.headers.get("origin")
-    if origin in ALLOWED_ORIGINS:
-        return JSONResponse(
-            status_code=200,
-            headers={
-                "Access-Control-Allow-Origin": origin,
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
-                "Access-Control-Max-Age": "86400",
-            }
-        )
-    return JSONResponse(status_code=400, content={"detail": "Origin not allowed"})
-```
+### Backend CORS Setup
 
-## Deployment Commands
-
-### ✅ Use These Commands (Firebase Authentication + CORS Fix)
-
-- **`make deploy-gcloud`** - For development/testing deployments
-- **`make deploy-production`** - For production deployments
-
-Both include the CORS fix and use Firebase authentication.
-
-### ❌ Don't Use These Commands (ADK Authentication)
-
-- **`make deploy`** - Uses ADK authentication (not compatible with our Firebase setup)
-- **`make deploy-include-vertex-session-storage`** - Uses ADK authentication
-
-## Testing the Fix
-
-Test CORS preflight with:
-
-```bash
-curl -X OPTIONS \
-  -H "Origin: https://82ndrop.web.app" \
-  -H "Access-Control-Request-Method: POST" \
-  -H "Access-Control-Request-Headers: Authorization,Content-Type" \
-  -v https://drop-agent-service-855515190257.us-central1.run.app/apps/drop_agent/users/test/sessions
-```
-
-**Expected Response:**
-
-```
-HTTP/2 200
-access-control-allow-origin: https://82ndrop.web.app
-access-control-allow-methods: DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT
-access-control-allow-headers: Authorization,Content-Type
-```
-
-## Allowed Origins
-
-The following origins are allowed for CORS:
+The backend service (running on Cloud Run) is configured to accept requests from the following origins:
 
 ```python
-ALLOWED_ORIGINS = [
-    "https://82ndrop.web.app",      # Production frontend
-    "http://localhost:4200",         # Local development
-    "http://localhost:8080",         # Local development
-    "http://localhost"               # Local development
+origins = [
+    "https://82ndrop.web.app",
+    "https://82ndrop-staging.web.app",
+    "http://localhost:4200",
+    "http://127.0.0.1:4200"
 ]
 ```
 
-## Frontend Integration
+### Security Headers
 
-The frontend should now be able to:
+All responses include the following security headers:
 
-1. ✅ Create sessions via POST to `/apps/drop_agent/users/{userId}/sessions`
-2. ✅ Send messages via POST to `/run`
-3. ✅ Use Server-Sent Events via `/run_sse`
-4. ✅ Include Authorization headers with Firebase ID tokens
+- `Access-Control-Allow-Credentials: true`
+- `Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS`
+- `Access-Control-Allow-Headers: Authorization, Content-Type`
 
-## Troubleshooting
+### Common CORS Issues
 
-### If CORS errors persist:
+1. Development Environment
 
-1. **Clear browser cache** - CORS errors can be cached
-2. **Check deployment** - Ensure you used `make deploy-gcloud` or `make deploy-production`
-3. **Verify origin** - Check that your frontend origin is in `ALLOWED_ORIGINS`
-4. **Test with curl** - Use the curl command above to verify the fix is deployed
+- Ensure local Angular development server runs on port 4200
+- Backend Uvicorn server should run on port 8000
+- Check that both origins are properly configured in CORS middleware
 
-### If authentication errors occur:
+2. Production Environment
 
-1. **Check Firebase token** - Ensure the user has `agent_access` custom claim
-2. **Verify service account** - Ensure `GOOGLE_APPLICATION_CREDENTIALS` is set
-3. **Check logs** - Use `make logs` to view Cloud Run logs
+- Verify Firebase hosting domains are whitelisted
+- Ensure all API requests use HTTPS
+- Check for any subdomain variations
 
-## Future Considerations
+### Testing CORS Configuration
 
-- This is a workaround for ADK 1.5.0 bug
-- When ADK is updated, this custom handler may be removed
-- Monitor ADK releases for CORS fixes
-- Consider reporting this issue to ADK maintainers
+1. Local Development
 
-## Related Files
+```bash
+# Start backend server
+uvicorn main:app --reload --port 8000
 
-- `main.py` - Contains the CORS fix
-- `makefile` - Updated with deployment documentation
-- `frontend/src/app/services/agent.service.ts` - Frontend API calls
-- `ai_docs/CORS_FIX_DOCUMENTATION.md` - This documentation
+# In another terminal, start Angular dev server
+cd frontend
+ng serve
+```
+
+2. Verify CORS Headers
+
+```bash
+curl -I -H "Origin: http://localhost:4200" \
+  http://127.0.0.1:8000/video-status/123
+```
+
+### Troubleshooting
+
+1. CORS Preflight Failures
+
+- Check if OPTIONS requests are being handled
+- Verify all required headers are included
+- Ensure origin matches exactly (including protocol and port)
+
+2. Authentication Issues
+
+- Confirm Authorization header is in allowed headers list
+- Check for proper token format in requests
+- Verify CORS configuration doesn't interfere with auth
+
+3. Production Issues
+
+- Validate SSL certificates
+- Check for proper domain configuration
+- Ensure all services use HTTPS in production

@@ -112,7 +112,7 @@ deploy-frontend:
 # Development and testing commands
 test-local:
 	@echo "[Test Local] Starting local development server..."
-	python main.py
+	ENV=staging python main.py
 
 test-auth:
 	@echo "[Test Authentication] Running Firebase authentication tests..."

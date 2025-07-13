@@ -1,123 +1,161 @@
-# Session Bridge Implementation - DEPLOYED ✅
+## Session Bridge Implementation
 
-## What Was Implemented
+### Architecture Overview
 
-A **minimal, production-safe bridge** between ADK backend sessions and Firebase frontend persistence.
+The session bridge connects the Angular frontend with the FastAPI backend, handling:
 
-## Changes Made
+- Authentication state
+- Video generation requests
+- Status polling
+- Error handling
 
-### 1. AgentService Integration (3 lines added)
+### Components
 
-```typescript
-// Added SessionHistoryService import and dependency injection
-import { SessionHistoryService } from './session-history.service';
-
-constructor(
-  private http: HttpClient,
-  private authService: AuthService,
-  private sessionHistoryService: SessionHistoryService  // ← Added this
-) {}
-```
-
-### 2. Session Creation Bridge (7 lines added)
+1. Frontend (Angular)
 
 ```typescript
-// Create session if we don't have one
-if (!this.currentSessionId) {
-  const session = await this.createSession();
-  this.currentSessionId = session.id;
+// Service for managing API communication
+@Injectable({
+  providedIn: "root",
+})
+export class AgentService {
+  private baseUrl = environment.apiUrl;
 
-  // Sync session to Firebase for persistence
-  try {
-    await this.sessionHistoryService.createSession(
-      `Video Session - ${new Date().toLocaleDateString()}`,
-      session.id // ← Use ADK session ID
+  constructor(private http: HttpClient) {}
+
+  // Add auth token to all requests
+  private getHeaders(): HttpHeaders {
+    return new HttpHeaders().set(
+      "Authorization",
+      `Bearer ${this.getFirebaseToken()}`
     );
-  } catch (firebaseError) {
-    console.warn("Firebase session sync failed (non-critical):", firebaseError);
+  }
+
+  // Video status endpoint
+  getVideoStatus(operationId: string): Observable<VideoStatus> {
+    return this.http.get<VideoStatus>(
+      `${this.baseUrl}/video-status/${operationId}`,
+      { headers: this.getHeaders() }
+    );
   }
 }
 ```
 
-### 3. Message Persistence Bridge (15 lines added)
+2. Backend (FastAPI)
 
-```typescript
-// Save messages to Firebase for persistence (non-critical)
-try {
-  if (this.currentSessionId) {
-    // Save user message
-    await this.sessionHistoryService.saveMessage(this.currentSessionId, {
-      type: "user",
-      content: message,
-    });
+```python
+# Authentication middleware
+async def verify_token(request: Request):
+    token = request.headers.get('Authorization')
+    if not token or not token.startswith('Bearer '):
+        raise HTTPException(status_code=401)
 
-    // Save agent response
-    await this.sessionHistoryService.saveMessage(this.currentSessionId, {
-      type: "agent",
-      content: agentContent,
-    });
-  }
-} catch (firebaseError) {
-  console.warn("Firebase message save failed (non-critical):", firebaseError);
-}
+    try:
+        # Verify Firebase token with correct audience
+        decoded_token = auth.verify_id_token(token)
+        if decoded_token['aud'] != 'taajirah':
+            raise ValueError('Invalid audience')
+        return decoded_token
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e))
 ```
 
-### 4. SessionHistoryService Enhancement (5 lines modified)
+### Communication Flow
 
-```typescript
-// Modified to accept ADK session IDs
-async createSession(title?: string, adkSessionId?: string): Promise<ChatSession> {
-  // Use ADK session ID if provided, otherwise generate new one
-  const session: ChatSession = {
-    id: adkSessionId || sessionRef.key!,  // ← Use ADK ID as Firebase ID
-    ...sessionData,
-  };
-}
+1. Authentication Flow
+
+```mermaid
+sequenceDiagram
+    Frontend->>Firebase: Login
+    Firebase-->>Frontend: Auth Token
+    Frontend->>Backend: API Request + Token
+    Backend->>Firebase: Verify Token
+    Firebase-->>Backend: Token Valid
+    Backend-->>Frontend: API Response
 ```
 
-## Key Benefits
+2. Video Generation Flow
 
-### ✅ **Judge-Ready Safety Features**
+```mermaid
+sequenceDiagram
+    Frontend->>Backend: Generate Video Request
+    Backend->>VertexAI: Start Generation
+    VertexAI-->>Backend: Operation ID
+    Backend-->>Frontend: Operation ID
+    loop Status Check
+        Frontend->>Backend: Check Status
+        Backend->>VertexAI: Get Status
+        alt Video Ready
+            Backend-->>Frontend: Video URL
+        else In Progress
+            Backend-->>Frontend: Status "processing"
+        else Error
+            Backend-->>Frontend: Error Details
+        end
+    end
+```
 
-- **Non-breaking**: All Firebase operations are in try-catch blocks
-- **Non-critical**: Firebase failures don't break ADK functionality
-- **Minimal footprint**: Only 30 lines of code added total
-- **Backward compatible**: Existing chat functionality unchanged
+### Error Handling
 
-### ✅ **Production Benefits**
+1. Authentication Errors
 
-- **Session persistence**: Sessions now survive browser refreshes
-- **Cross-device sync**: Same sessions accessible from different devices
-- **Session history**: Full conversation history maintained in Firebase
-- **ADK compliance maintained**: Backend session management unchanged
+- Invalid token format
+- Expired tokens
+- Wrong audience claim
+- Missing authorization header
 
-### ✅ **Real-World Impact**
+2. API Errors
 
-- **Demo reliability**: Sessions won't disappear during judge presentations
-- **User experience**: Chat history persists across browser sessions
-- **Scalability**: Firebase handles concurrent users automatically
-- **Data consistency**: ADK remains the single source of truth
+- 401 Unauthorized
+- 404 Operation Not Found
+- 500 Internal Server Error
 
-## How It Works
+### Best Practices
 
-1. **ADK creates session** (existing functionality)
-2. **Bridge syncs to Firebase** (new - for persistence)
-3. **ADK handles conversation** (existing functionality)
-4. **Bridge saves messages** (new - for history)
-5. **Firebase provides cross-device access** (new - for UX)
+1. Frontend
 
-## Testing Verification
+- Implement token refresh
+- Handle API errors gracefully
+- Implement request retry logic
+- Use proper typing for API responses
 
-The system now:
+2. Backend
 
-- ✅ Creates ADK sessions normally (backend working)
-- ✅ Mirrors sessions to Firebase (cross-device persistence)
-- ✅ Saves chat history to Firebase (conversation history)
-- ✅ Fails gracefully if Firebase is down (non-critical design)
-- ✅ Works identically to before for judges (no UI changes)
+- Validate all incoming requests
+- Proper error messages
+- Rate limiting
+- Request logging
 
-## Deployment Status: LIVE ✅
+### Testing
 
-**URL**: https://82ndrop.web.app
-**Status**: Successfully deployed and operational
-**Risk Level**: Minimal (all changes are additive and non-breaking)
+1. Local Development
+
+```bash
+# Start backend
+uvicorn main:app --reload --port 8000
+
+# Start frontend
+ng serve
+```
+
+2. Integration Tests
+
+- Authentication flow
+- Video generation flow
+- Error handling
+- Token refresh
+
+### Security Considerations
+
+1. Token Handling
+
+- Secure token storage
+- Regular token refresh
+- Proper audience validation
+
+2. API Security
+
+- HTTPS only
+- Rate limiting
+- Input validation
+- Error message sanitization

@@ -1,217 +1,288 @@
-# Authentication & Permissions System Fixes
+# Authentication & Permissions System
 
-## Overview
+## Current State
 
-Fixed critical issues with the Firebase authentication system to properly handle custom claims and permissions for the 82ndrop agent system.
+The 82ndrop application uses Firebase Authentication with proper audience claims and custom claims for access control.
 
-## Issues Identified
+### Core Components
 
-### 🚨 Critical Problems
+1. **Firebase Authentication**
 
-1. **Frontend Auth Service** - No custom claims support
-2. **Auth Guard** - Only checked authentication, not permissions
-3. **New User Flow** - Broken experience for users without claims
-4. **Claims Propagation** - No handling of Firebase claims delay
+   - Google Sign-In as primary auth method
+   - Proper audience claim: "taajirah"
+   - Custom claims for access control
+   - Token refresh handling
 
-## Solutions Implemented
+2. **Backend Middleware**
 
-### 1. Enhanced Auth Service (`frontend/src/app/services/auth.service.ts`)
+   - Firebase ID token validation
+   - Audience claim verification
+   - Custom claims checking
+   - Error handling for auth failures
 
-**New Features:**
+3. **Frontend Services**
+   - AuthService for token management
+   - AuthGuard for route protection
+   - Access-pending flow for new users
+   - Token refresh mechanism
 
-- **Custom Claims Support**: Retrieves and manages Firebase custom claims
-- **Permission Checking**: Methods to check agent access and specific permissions
-- **Token Refresh**: Force refresh tokens to get updated claims
-- **Enhanced User Object**: Includes claims and access status
+## Authentication Flow
 
-**Key Methods:**
+1. **User Signs In**
+
+   ```typescript
+   // frontend/src/app/services/auth.service.ts
+   async signInWithGoogle() {
+     const userCredential = await signInWithPopup(this.auth, this.googleProvider);
+     await this.handlePostSignIn(userCredential.user);
+   }
+   ```
+
+2. **Token Validation**
+
+   ```python
+   # main.py
+   try:
+       decoded_token = auth.verify_id_token(token)
+       if decoded_token['aud'] != 'taajirah':
+           raise ValueError("Invalid audience claim")
+   except Exception as e:
+       raise HTTPException(status_code=401, detail=str(e))
+   ```
+
+3. **Access Control**
+   ```typescript
+   // frontend/src/app/guards/auth.guard.ts
+   canActivate(): Observable<boolean> {
+     return this.authService.user$.pipe(
+       map(user => {
+         if (!user) {
+           this.router.navigate(['/login']);
+           return false;
+         }
+         if (!user.hasAgentAccess) {
+           this.router.navigate(['/access-pending']);
+           return false;
+         }
+         return true;
+       })
+     );
+   }
+   ```
+
+## Custom Claims Structure
+
+```json
+{
+  "agent_access": true,
+  "access_level": "basic|premium|admin",
+  "agent_permissions": {
+    "82ndrop": true,
+    "video_prompts": true,
+    "search_agent": false,
+    "guide_agent": true,
+    "prompt_writer": true
+  }
+}
+```
+
+## Access Levels
+
+1. **Basic Access**
+
+   - Guide Agent usage
+   - Prompt Writer access
+   - Basic video prompts
+
+2. **Premium Access**
+
+   - All Basic features
+   - Search Agent access
+   - Advanced prompt features
+
+3. **Admin Access**
+   - All Premium features
+   - User management
+   - Analytics access
+
+## Common Issues & Solutions
+
+### 1. Token Audience Mismatch
+
+**Problem**: Firebase ID token has incorrect "aud" claim
+**Solution**: Ensure token audience is "taajirah"
 
 ```typescript
-- hasAgentAccess(): boolean
-- getAccessLevel(): string
-- hasPermission(permission: string): boolean
-- refreshUserToken(): Promise<void>
-```
-
-### 2. Improved Auth Guard (`frontend/src/app/guards/auth.guard.ts`)
-
-**Enhanced Logic:**
-
-- ✅ **Authenticated + Has Access** → Allow through
-- ⚠️ **Authenticated + No Access** → Redirect to `/access-pending`
-- ❌ **Not Authenticated** → Redirect to `/login`
-
-### 3. Access Pending Component (`frontend/src/app/components/access-pending/`)
-
-**Features:**
-
-- **User-Friendly Interface**: Clear explanation of access status
-- **Access Checking**: Button to refresh and check access status
-- **Access Requesting**: Button to request access via Cloud Functions
-- **Account Information**: Shows user details and instructions
-
-### 4. Access Service (`frontend/src/app/services/access.service.ts`)
-
-**Cloud Function Integration:**
-
-- `requestAccess()`: Check and grant access for current user
-- `grantAccess()`: Admin function to grant access
-- `autoGrantAccess()`: Automatic access granting
-
-### 5. Cloud Functions (`cloud-functions/auto-grant-access.js`)
-
-**New Functions:**
-
-- `autoGrantAccess`: Automatically grant basic access to new users
-- `grantAccessManual`: Manually grant access (admin use)
-- `checkAndGrantAccess`: Check if user needs access and grant it
-
-**Default Claims Structure:**
-
-```javascript
-{
-  agent_access: true,
-  access_level: "basic",
-  agent_permissions: {
-    "82ndrop": true,
-    video_prompts: true,
-    search_agent: false, // Premium only
-    guide_agent: true,
-    prompt_writer: true,
+// frontend/src/environments/environment.ts
+export const environment = {
+  firebase: {
+    // ...other config
+    authDomain: "taajirah.firebaseapp.com",
   },
-  granted_at: "2025-06-20T...",
-  auto_granted: true
+};
+```
+
+### 2. Claims Propagation Delay
+
+**Problem**: New claims not immediately available
+**Solution**: Force token refresh
+
+```typescript
+// frontend/src/app/services/auth.service.ts
+async refreshUserToken(): Promise<void> {
+  const user = this.auth.currentUser;
+  if (user) {
+    await user.getIdToken(true);
+  }
 }
 ```
 
-### 6. Updated Login Flow (`frontend/src/app/components/login/login.component.ts`)
+### 3. Access Pending State
 
-**Enhanced Process:**
+**Problem**: Users stuck in access-pending state
+**Solution**: Implement auto-grant access
 
-1. **Sign Up**: Create account → Wait for claims → Check access → Route appropriately
-2. **Sign In**: Authenticate → Check access → Route based on permissions
-3. **Google Login**: Same access checking as email login
-
-**New Methods:**
-
-- `handleNewUserAccess()`: Manages new user onboarding
-- `handleExistingUserAccess()`: Checks existing user permissions
-
-## User Experience Flow
-
-### New User Journey
-
-1. **Sign Up** → Account created
-2. **Auto-Grant Process** → Cloud Function grants basic access
-3. **Token Refresh** → Frontend gets updated claims
-4. **Access Check** → Redirect to dashboard or pending page
-
-### Existing User Journey
-
-1. **Sign In** → Authentication successful
-2. **Claims Check** → Verify agent access
-3. **Route Decision** → Dashboard (if access) or pending page
-
-### Access Pending Experience
-
-1. **Clear Information** → User understands their status
-2. **Request Access** → Can trigger access granting
-3. **Check Status** → Can refresh to see updates
-4. **Support Info** → Clear next steps
-
-## Backend Integration
-
-### Claims Expected by Backend
-
-The backend (`api/main.py`) expects these custom claims:
-
-```python
-{
-    "agent_access": bool,
-    "access_level": str,  # "basic", "premium", "admin"
-    "agent_permissions": dict
-}
+```typescript
+// functions/auto-grant-access.js
+exports.autoGrantAccess = functions.auth.user().onCreate(async (user) => {
+  await admin.auth().setCustomUserClaims(user.uid, {
+    agent_access: true,
+    access_level: "basic",
+    agent_permissions: {
+      "82ndrop": true,
+      video_prompts: true,
+      guide_agent: true,
+      prompt_writer: true,
+    },
+  });
+});
 ```
 
-### Authentication Flow
+## Security Best Practices
 
-1. Frontend sends Firebase ID token
-2. Backend verifies token and extracts claims
-3. Backend checks `agent_access: true`
-4. Backend uses `access_level` for feature permissions
+1. **Token Validation**
 
-## Testing & Deployment
+   - Always verify tokens server-side
+   - Check audience claim
+   - Validate custom claims
+   - Handle errors gracefully
 
-### Test User Setup
+2. **Access Control**
 
-Use the existing test user:
+   - Use role-based permissions
+   - Implement proper guards
+   - Check permissions server-side
+   - Log authentication events
 
-- **Email**: `test@test.com`
-- **Password**: `testpassword123`
-- **Access Level**: `admin`
+3. **Error Handling**
+   - Return proper HTTP status codes
+   - Provide meaningful error messages
+   - Log authentication failures
+   - Implement rate limiting
 
-### Cloud Functions Deployment
+## Testing
+
+### Local Testing
 
 ```bash
-cd cloud-functions
-npm install
-# Deploy functions (requires Firebase CLI setup)
+# Test with curl
+curl -X POST http://localhost:8000/run \
+  -H "Authorization: Bearer YOUR_FIREBASE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "test"}'
 ```
 
-### Frontend Testing
+### Production Testing
 
-1. **New User Flow**: Create new account and verify access granting
-2. **Existing User Flow**: Login with test user and verify dashboard access
-3. **Access Pending**: Test users without claims see pending page
+1. Get real Firebase token from browser
+2. Test API endpoints with token
+3. Verify proper error handling
+4. Check claims propagation
 
-## Security Considerations
+## Deployment Considerations
 
-### Access Control
+1. **Environment Variables**
 
-- ✅ Users can only access features they have permissions for
-- ✅ Admin features require `access_level: "admin"`
-- ✅ Analytics endpoints respect user permissions
-- ✅ Token refresh prevents stale claims
+   - Use proper Firebase project IDs
+   - Set correct audience claims
+   - Configure service accounts
 
-### Claims Security
+2. **CI/CD Pipeline**
 
-- ✅ Claims set server-side via Firebase Admin SDK
-- ✅ Claims verified on backend before API access
-- ✅ Frontend permissions are UI-only (backend enforces)
+   - Test authentication in staging
+   - Verify token validation
+   - Check claims handling
 
-## Monitoring & Analytics
+3. **Monitoring**
+   - Log authentication events
+   - Track failed attempts
+   - Monitor token refreshes
 
-### Access Tracking
+## Firebase Authentication Configuration
 
-- All authentication attempts logged
-- Access grants tracked in analytics
-- User permission levels monitored
-- Failed access attempts recorded
+### Current Setup
 
-## Next Steps
+- Project: Taajirah
+- Required Audience Claim: `taajirah`
+- Service Account: `taajirah-agents-service-account.json`
 
-### Immediate Actions
+### Important Changes
 
-1. **Deploy Cloud Functions** - Enable automatic access granting
-2. **Test New User Flow** - Verify complete sign-up process
-3. **Update Documentation** - User guides for access process
+- Audience claim has been updated from `taajirah-agents` to `taajirah`
+- Service account initialization happens at application startup
+- Token verification is strictly enforced for all protected endpoints
 
-### Future Enhancements
+### Common Issues and Solutions
 
-1. **Email Notifications** - Notify users when access is granted
-2. **Admin Dashboard** - Manage user permissions
-3. **Access Levels** - Implement premium features
-4. **Audit Logging** - Enhanced permission change tracking
+1. Incorrect Audience Claim
 
-## Status: ✅ READY FOR TESTING
+```
+Error: Firebase ID token has incorrect "aud" (audience) claim.
+Expected "taajirah" but got "taajirah-agents"
+```
 
-The authentication system now properly handles:
+**Solution**: Ensure your Firebase configuration is using the correct project and audience claim.
 
-- ✅ Custom claims and permissions
-- ✅ New user access granting
-- ✅ Existing user permission checking
-- ✅ Graceful handling of access pending states
-- ✅ Backend integration with comprehensive claims
-- ✅ User-friendly error handling and messaging
+2. Token Verification Failures
 
-**All components are integrated and ready for production testing.**
+- Check if token is properly formatted
+- Verify token is not expired
+- Ensure token comes from the correct Firebase project
+
+### Implementation Details
+
+1. Server Initialization
+
+```python
+# Service account loading
+Loading service account from: /path/to/taajirah-agents-service-account.json
+Firebase initialized with service account
+```
+
+2. Protected Endpoints
+
+- All video status endpoints require authentication
+- Token must be passed in Authorization header with Bearer prefix
+- 401 Unauthorized responses include detailed error messages for debugging
+
+### Testing Authentication
+
+1. Local Development
+
+- Use real Firebase tokens from authenticated users
+- Include token in Authorization header: `Bearer <token>`
+- Test both successful and failed authentication scenarios
+
+2. Common Response Codes
+
+- 200 OK: Successful authentication
+- 401 Unauthorized: Authentication failed
+- 403 Forbidden: Insufficient permissions
+
+### Security Best Practices
+
+1. Never expose service account credentials
+2. Always use HTTPS for token transmission
+3. Implement proper token refresh mechanisms
+4. Monitor and log authentication failures
+5. Regular rotation of service account keys
