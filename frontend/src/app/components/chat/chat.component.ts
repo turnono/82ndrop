@@ -17,7 +17,8 @@ import {
 } from '../../services/agent.service';
 import { AuthService } from '../../services/auth.service';
 import { SessionHistoryService } from '../../services/session-history.service';
-import { Subscription } from 'rxjs';
+import { Subscription, Observable } from 'rxjs';
+import { MatButtonModule } from '@angular/material/button';
 
 interface ChatMessage {
   type: 'user' | 'agent' | 'system' | 'progress';
@@ -30,9 +31,17 @@ interface ChatMessage {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MatButtonModule],
   template: `
     <div class="chat-container">
+      <div class="mock-controls" *ngIf="isAuthorizedForVideo()">
+        <button mat-raised-button color="accent" (click)="toggleMockMode()">
+          {{ (mockMode$ | async) ? 'Disable Mock Mode' : 'Enable Mock Mode' }}
+        </button>
+        <div class="mock-status" *ngIf="mockMode$ | async">
+          Mock Mode Enabled
+        </div>
+      </div>
       <div class="messages-container" #messagesContainer>
         <div
           *ngFor="let message of messages"
@@ -163,6 +172,21 @@ interface ChatMessage {
         display: flex;
         flex-direction: column;
         background: #f8f9fa;
+      }
+
+      .mock-controls {
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: white;
+        border-bottom: 1px solid #e9ecef;
+      }
+
+      .mock-status {
+        color: #1976d2;
+        font-weight: 500;
+        font-size: 14px;
       }
 
       .messages-container {
@@ -700,13 +724,22 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   private subscriptions: Subscription[] = [];
 
+  mockMode$: Observable<boolean>;
+
   constructor(
     private agentService: AgentService,
     private authService: AuthService,
     private sessionHistoryService: SessionHistoryService
-  ) {}
+  ) {
+    this.mockMode$ = this.agentService.mockMode$;
+  }
 
   ngOnInit() {
+    // Only get mock status if user is authorized
+    if (this.isAuthorizedForVideo()) {
+      this.agentService.getMockStatus().subscribe();
+    }
+
     this.addSystemMessage(
       "Welcome to 82ndrop! Describe your video idea and I'll help you create engaging prompts."
     );
@@ -1053,6 +1086,16 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     event.preventDefault();
     if (this.generatedVideoUrl) {
       window.open(this.generatedVideoUrl, '_blank');
+    }
+  }
+
+  async toggleMockMode() {
+    if (this.isAuthorizedForVideo()) {
+      try {
+        await this.agentService.toggleMockMode().toPromise();
+      } catch (error) {
+        console.error('Error toggling mock mode:', error);
+      }
     }
   }
 }

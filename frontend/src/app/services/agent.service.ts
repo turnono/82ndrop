@@ -5,6 +5,8 @@ import { catchError, switchMap } from 'rxjs/operators';
 import { AuthService } from './auth.service';
 import { SessionHistoryService } from './session-history.service';
 import { environment } from '../../environments/environment';
+import { tap } from 'rxjs/operators';
+import { from } from 'rxjs';
 
 export interface ChatMessage {
   message: string;
@@ -64,6 +66,11 @@ export interface VideoGenerationResponse {
   videoUrl?: string; // For the transformed HTTPS URL
 }
 
+interface MockResponse {
+  mock_mode: boolean;
+  message: string;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -75,6 +82,10 @@ export class AgentService {
   // Observable for chat messages
   private messagesSubject = new BehaviorSubject<any[]>([]);
   public messages$ = this.messagesSubject.asObservable();
+
+  // Mock mode state
+  private mockModeSubject = new BehaviorSubject<boolean>(true);
+  mockMode$ = this.mockModeSubject.asObservable();
 
   constructor(
     private http: HttpClient,
@@ -587,5 +598,31 @@ export class AgentService {
       console.error('Error cancelling video generation:', error);
       throw error;
     }
+  }
+
+  // Toggle mock mode
+  toggleMockMode(): Observable<MockResponse> {
+    return from(this.getAuthHeaders()).pipe(
+      switchMap(headers => 
+        this.http.post<MockResponse>(`${this.apiUrl}/toggle-mock`, {}, { headers }).pipe(
+          tap(response => {
+            this.mockModeSubject.next(response.mock_mode);
+          })
+        )
+      )
+    );
+  }
+
+  // Get mock mode status
+  getMockStatus(): Observable<MockResponse> {
+    return from(this.getAuthHeaders()).pipe(
+      switchMap(headers => 
+        this.http.get<MockResponse>(`${this.apiUrl}/mock-status`, { headers }).pipe(
+          tap(response => {
+            this.mockModeSubject.next(response.mock_mode);
+          })
+        )
+      )
+    );
   }
 }

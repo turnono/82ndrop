@@ -108,50 +108,36 @@ async def health_check():
 # Mock mode configuration
 MOCK_MODE = True  # Set to False to use real video generation
 
-# Mock video pool - only used when MOCK_MODE is True
-MOCK_VIDEOS_POOL = [
-    {
-        "video_uri": "gs://82ndrop-videos-staging-taajirah/users/iVZ4Pu9YzXTGOo2dXRLmJhbgEnl1/sessions/fe19d3f1-b4ca-4b14-a756-9d8c48c65505/videos/11698914790024900414/sample_0.mp4",
-        "operation_name": "projects/taajirah/locations/global/publishers/google/models/veo-3.0-generate-preview/operations/b3343691-c843-4f93-83a8-b70e27a76874"
-    },
-    {
-        "video_uri": "gs://82ndrop-videos-staging-taajirah/users/iVZ4Pu9YzXTGOo2dXRLmJhbgEnl1/sessions/f5266bbe-ac19-4695-a675-6ff16457c2e1/videos/1848635107879644044/sample_0.mp4",
-        "operation_name": "projects/taajirah/locations/global/publishers/google/models/veo-3.0-generate-preview/operations/c4454792-d954-5fa4-94b9-c81e38b87985"
-    },
-    {
-        "video_uri": "gs://82ndrop-videos-staging-taajirah/users/iVZ4Pu9YzXTGOo2dXRLmJhbgEnl1/sessions/ef64de1c-ba1e-4593-9107-9d4fbeaef6ac/videos/14801039161406831426/sample_0.mp4",
-        "operation_name": "projects/taajirah/locations/global/publishers/google/models/veo-3.0-generate-preview/operations/d5565893-ea65-6fb5-a5ca-d92f49c98a96"
-    },
-    {
-        "video_uri": "gs://82ndrop-videos-staging-taajirah/users/iVZ4Pu9YzXTGOo2dXRLmJhbgEnl1/sessions/e887b7bc-7c75-46ab-adbe-1552f100fd3d/videos/13981806491487398775/sample_0.mp4",
-        "operation_name": "projects/taajirah/locations/global/publishers/google/models/veo-3.0-generate-preview/operations/e6676994-fb76-7gc6-b6db-ea3g5ad99ba7"
-    }
+# Mock video pool - pre-selected videos that already exist in the bucket
+MOCK_VIDEOS = [
+    "gs://82ndrop-videos-staging-taajirah/users/iVZ4Pu9YzXTGOo2dXRLmJhbgEnl1/sessions/fe19d3f1-b4ca-4b14-a756-9d8c48c65505/videos/11698914790024900414/sample_0.mp4",
+    "gs://82ndrop-videos-staging-taajirah/users/iVZ4Pu9YzXTGOo2dXRLmJhbgEnl1/sessions/f5266bbe-ac19-4695-a675-6ff16457c2e1/videos/1848635107879644044/sample_0.mp4",
+    "gs://82ndrop-videos-staging-taajirah/users/iVZ4Pu9YzXTGOo2dXRLmJhbgEnl1/sessions/ef64de1c-ba1e-4593-9107-9d4fbeaef6ac/videos/14801039161406831426/sample_0.mp4",
+    "gs://82ndrop-videos-staging-taajirah/users/iVZ4Pu9YzXTGOo2dXRLmJhbgEnl1/sessions/e887b7bc-7c75-46ab-adbe-1552f100fd3d/videos/13981806491487398775/sample_0.mp4"
 ]
 
-# Store mock operations
-mock_operations: Dict[str, Dict] = {}
-
-async def simulate_video_generation(operation_name: str, user_id: str, session_id: str) -> None:
-    """Simulate async video generation process."""
-    # Simulate processing time (5-10 seconds)
-    await asyncio.sleep(random.uniform(5, 10))
-    
-    # Get the existing operation data
-    operation_data = mock_operations[operation_name]
-    
-    # Update operation status to complete, maintaining the same video_uri
-    mock_operations[operation_name] = {
-        "status": "completed",
-        "video_uri": operation_data["video_uri"],  # Keep the same video_uri
-        "operation_name": operation_name,
-        "user_id": user_id,
-        "session_id": session_id,
-        "created_at": operation_data["created_at"]  # Keep the original creation time
+@app.post("/toggle-mock")
+async def toggle_mock(request: Request):
+    """Toggle mock mode on/off."""
+    global MOCK_MODE
+    MOCK_MODE = not MOCK_MODE
+    return {
+        "mock_mode": MOCK_MODE,
+        "message": f"Mock mode {'enabled' if MOCK_MODE else 'disabled'}"
     }
+
+@app.get("/mock-status")
+async def get_mock_status():
+    """Get current mock mode status."""
+    return {
+        "mock_mode": MOCK_MODE,
+        "message": f"Mock mode is currently {'enabled' if MOCK_MODE else 'disabled'}"
+    }
+
 
 @app.post("/generate-video")
 async def generate_video(request: Request):
-    """Mock video generation endpoint."""
+    """Video generation endpoint."""
     try:
         data = await request.json()
         user_id = data.get("user_id")
@@ -162,25 +148,17 @@ async def generate_video(request: Request):
         
         if MOCK_MODE:
             # Pick a random video from our pool
-            video = random.choice(MOCK_VIDEOS_POOL)
-            
-            # Create a unique operation name
+            video_uri = random.choice(MOCK_VIDEOS)
             operation_name = f"projects/taajirah/locations/global/publishers/google/models/veo-3.0-generate-preview/operations/{random.randbytes(16).hex()}"
             
-            # Initialize operation status
-            mock_operations[operation_name] = {
-                "status": "processing",
+            return {
+                "status": "completed",
                 "operation_name": operation_name,
+                "video_uri": video_uri,
                 "user_id": user_id,
                 "session_id": session_id,
-                "created_at": datetime.now().isoformat(),
-                "video_uri": video["video_uri"]  # Include the video URI immediately
+                "created_at": datetime.now().isoformat()
             }
-            
-            # Start async video generation simulation
-            asyncio.create_task(simulate_video_generation(operation_name, user_id, session_id))
-            
-            return mock_operations[operation_name]  # Return the full response including video_uri
         else:
             # Original video generation code
             # Get user from request state
