@@ -722,6 +722,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   isGeneratingVideo = false;
   generatedVideoUrl: string | null = null;
 
+  private currentOperationName: string | null = null;
+  private pollingInterval: any = null;
+
   private subscriptions: Subscription[] = [];
 
   mockMode$: Observable<boolean>;
@@ -784,6 +787,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   ngOnDestroy() {
+    // Clean up polling when component is destroyed
+    this.stopPolling();
     this.subscriptions.forEach((sub) => sub.unsubscribe());
   }
 
@@ -992,7 +997,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   // Handle video generation
-  async onGenerateVideoClick() {
+  async onGenerateVideoClick(): Promise<void> {
     if (!this.isAuthorizedForVideo()) {
       this.addAgentMessage(
         'Sorry, you are not authorized to generate videos.',
@@ -1020,25 +1025,27 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         lastAgentMessage.content
       );
 
+      // If status is in_progress, start polling
+      if (response.status === 'in_progress') {
+        this.addAgentMessage(
+          '🎬 Video generation has started. Please wait while we process your request...',
+          new Date().toISOString()
+        );
+
+        // Store operation name and start polling
+        this.currentOperationName = response.operation_name;
+        this.startPolling();
+        return;
+      }
+
       this.isGeneratingVideo = false;
 
-      // Get video URL from response - prefer transformed URL if available
-      const videoUrl = response.videoUrl || response.video_uri;
-      if (!videoUrl || typeof videoUrl !== 'string' || !videoUrl.trim()) {
-        throw new Error('Invalid or missing video URL in response');
+      // Only try to access video URL if status is completed
+      if (response.status === 'completed') {
+        await this.handleCompletedVideo(response);
+      } else if (response.status === 'error') {
+        throw new Error(response.error || 'Video generation failed');
       }
-
-      // Transform GCS URL if needed (as a backup in case service didn't do it)
-      if (videoUrl.startsWith('gs://')) {
-        const withoutProtocol = videoUrl.replace('gs://', '');
-        const [bucket, ...pathParts] = withoutProtocol.split('/');
-        const path = pathParts.join('/');
-        this.generatedVideoUrl = `https://storage.cloud.google.com/${bucket}/${path}`;
-      } else {
-        this.generatedVideoUrl = videoUrl;
-      }
-
-      console.log('Video generated successfully:', this.generatedVideoUrl);
     } catch (error) {
       console.error('Error generating video:', error);
       this.isGeneratingVideo = false;
@@ -1054,17 +1061,89 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     }
   }
 
+  private async startPolling(): Promise<void> {
+    // Clear any existing polling
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+    }
+
+    // Start polling every 5 seconds
+    this.pollingInterval = setInterval(async () => {
+      try {
+        if (!this.currentOperationName) {
+          this.stopPolling();
+          return;
+        }
+
+        const status = await this.agentService.checkVideoStatus(
+          this.currentOperationName
+        );
+
+        if (status.status === 'completed') {
+          await this.handleCompletedVideo(status);
+          this.stopPolling();
+        } else if (status.status === 'error') {
+          throw new Error(status.error || 'Video generation failed');
+        }
+        // Continue polling if still in_progress
+      } catch (error) {
+        console.error('Error checking video status:', error);
+        this.addAgentMessage(
+          `❌ Video generation failed: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`,
+          new Date().toISOString()
+        );
+        this.stopPolling();
+      }
+    }, 5000); // Poll every 5 seconds
+  }
+
+  private stopPolling(): void {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
+    this.currentOperationName = null;
+    this.isGeneratingVideo = false;
+  }
+
+  private async handleCompletedVideo(
+    response: VideoGenerationResponse
+  ): Promise<void> {
+    // Get video URL from response - prefer transformed URL if available
+    const videoUrl = response.videoUrl || response.video_uri;
+    if (!videoUrl || typeof videoUrl !== 'string' || !videoUrl.trim()) {
+      throw new Error('Invalid or missing video URL in response');
+    }
+
+    // Transform GCS URL if needed (as a backup in case service didn't do it)
+    if (videoUrl.startsWith('gs://')) {
+      const withoutProtocol = videoUrl.replace('gs://', '');
+      const [bucket, ...pathParts] = withoutProtocol.split('/');
+      const path = pathParts.join('/');
+      this.generatedVideoUrl = `https://storage.cloud.google.com/${bucket}/${path}`;
+    } else {
+      this.generatedVideoUrl = videoUrl;
+    }
+
+    console.log('Video generated successfully:', this.generatedVideoUrl);
+  }
+
   resetVideoGeneration() {
     try {
       // Cancel any ongoing video generation processes
-      if (this.isGeneratingVideo) {
+      if (this.isGeneratingVideo && this.currentOperationName) {
         console.log('Cancelling ongoing video generation...');
-        // TODO: Implement actual cancellation logic when backend is ready
-        // const currentJobId = this.currentVideoJobId; // Would need to track this
-        // if (currentJobId) {
-        //   await this.agentService.cancelVideoGeneration(currentJobId);
-        // }
+        this.agentService
+          .cancelVideoGeneration(this.currentOperationName)
+          .catch((error) =>
+            console.error('Error cancelling video generation:', error)
+          );
       }
+
+      // Stop polling
+      this.stopPolling();
 
       // Reset state variables
       this.showGeneratePrompt = false;
@@ -1077,6 +1156,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     } catch (error) {
       console.error('Error during video generation reset:', error);
       // Ensure critical state is reset even if there's an error
+      this.stopPolling();
       this.isGeneratingVideo = false;
       this.generatedVideoUrl = null;
     }
