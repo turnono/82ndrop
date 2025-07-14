@@ -116,6 +116,9 @@ MOCK_VIDEOS = [
     "gs://82ndrop-videos-staging-taajirah/users/iVZ4Pu9YzXTGOo2dXRLmJhbgEnl1/sessions/e887b7bc-7c75-46ab-adbe-1552f100fd3d/videos/13981806491487398775/sample_0.mp4"
 ]
 
+# Dictionary to store mock operations
+mock_operations = {}
+
 @app.post("/toggle-mock")
 async def toggle_mock(request: Request):
     """Toggle mock mode on/off."""
@@ -147,18 +150,19 @@ async def generate_video(request: Request):
             raise HTTPException(status_code=400, detail="Missing user_id or session_id")
         
         if MOCK_MODE:
-            # Pick a random video from our pool
-            video_uri = random.choice(MOCK_VIDEOS)
+            # Generate a random operation name
             operation_name = f"projects/taajirah/locations/global/publishers/google/models/veo-3.0-generate-preview/operations/{random.randbytes(16).hex()}"
             
-            return {
-                "status": "completed",
+            # Store operation data
+            mock_operations[operation_name] = {
+                "status": "in_progress",
                 "operation_name": operation_name,
-                "video_uri": video_uri,
                 "user_id": user_id,
                 "session_id": session_id,
                 "created_at": datetime.now().isoformat()
             }
+            
+            return mock_operations[operation_name]
         else:
             # Original video generation code
             # Get user from request state
@@ -252,7 +256,21 @@ async def check_video_status(operation_name: str, request: Request):
         if MOCK_MODE:
             if operation_name not in mock_operations:
                 raise HTTPException(status_code=404, detail="Operation not found")
-            return mock_operations[operation_name]
+            
+            operation_data = mock_operations[operation_name]
+            
+            # Simulate video generation progress
+            if operation_data["status"] == "in_progress":
+                # Wait a bit to simulate processing
+                await asyncio.sleep(2)
+                
+                # Randomly decide if the operation should complete
+                if random.random() < 0.3:  # 30% chance to complete
+                    operation_data["status"] = "completed"
+                    operation_data["video_uri"] = random.choice(MOCK_VIDEOS)
+                    mock_operations[operation_name] = operation_data
+            
+            return operation_data
         else:
             # Original video status check code
             # Get operation data from memory

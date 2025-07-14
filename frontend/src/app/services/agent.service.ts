@@ -58,12 +58,13 @@ export interface UserProfile {
 
 export interface VideoGenerationResponse {
   status: string;
-  video_uri: string;
+  video_uri?: string;
   operation_name: string;
   user_id: string;
   session_id: string;
   created_at: string;
   videoUrl?: string; // For the transformed HTTPS URL
+  error?: string; // For error messages when status is 'error'
 }
 
 interface MockResponse {
@@ -603,12 +604,14 @@ export class AgentService {
   // Toggle mock mode
   toggleMockMode(): Observable<MockResponse> {
     return from(this.getAuthHeaders()).pipe(
-      switchMap(headers => 
-        this.http.post<MockResponse>(`${this.apiUrl}/toggle-mock`, {}, { headers }).pipe(
-          tap(response => {
-            this.mockModeSubject.next(response.mock_mode);
-          })
-        )
+      switchMap((headers) =>
+        this.http
+          .post<MockResponse>(`${this.apiUrl}/toggle-mock`, {}, { headers })
+          .pipe(
+            tap((response) => {
+              this.mockModeSubject.next(response.mock_mode);
+            })
+          )
       )
     );
   }
@@ -616,12 +619,14 @@ export class AgentService {
   // Get mock mode status
   getMockStatus(): Observable<MockResponse> {
     return from(this.getAuthHeaders()).pipe(
-      switchMap(headers => 
-        this.http.get<MockResponse>(`${this.apiUrl}/mock-status`, { headers }).pipe(
-          tap(response => {
-            this.mockModeSubject.next(response.mock_mode);
-          })
-        )
+      switchMap((headers) =>
+        this.http
+          .get<MockResponse>(`${this.apiUrl}/mock-status`, { headers })
+          .pipe(
+            tap((response) => {
+              this.mockModeSubject.next(response.mock_mode);
+            })
+          )
       )
     );
   }
