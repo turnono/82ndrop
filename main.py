@@ -136,22 +136,22 @@ async def simulate_video_generation(operation_name: str, user_id: str, session_i
     # Simulate processing time (5-10 seconds)
     await asyncio.sleep(random.uniform(5, 10))
     
-    # Pick a random video from our pool
-    video = random.choice(MOCK_VIDEOS_POOL)
+    # Get the existing operation data
+    operation_data = mock_operations[operation_name]
     
-    # Update operation status to complete
+    # Update operation status to complete, maintaining the same video_uri
     mock_operations[operation_name] = {
         "status": "completed",
-        "video_uri": video["video_uri"],
+        "video_uri": operation_data["video_uri"],  # Keep the same video_uri
         "operation_name": operation_name,
         "user_id": user_id,
         "session_id": session_id,
-        "created_at": datetime.now().isoformat()
+        "created_at": operation_data["created_at"]  # Keep the original creation time
     }
 
 @app.post("/generate-video")
 async def generate_video(request: Request):
-    """Video generation endpoint."""
+    """Mock video generation endpoint."""
     try:
         data = await request.json()
         user_id = data.get("user_id")
@@ -159,9 +159,12 @@ async def generate_video(request: Request):
         
         if not user_id or not session_id:
             raise HTTPException(status_code=400, detail="Missing user_id or session_id")
-
+        
         if MOCK_MODE:
-            # Mock video generation
+            # Pick a random video from our pool
+            video = random.choice(MOCK_VIDEOS_POOL)
+            
+            # Create a unique operation name
             operation_name = f"projects/taajirah/locations/global/publishers/google/models/veo-3.0-generate-preview/operations/{random.randbytes(16).hex()}"
             
             # Initialize operation status
@@ -170,16 +173,14 @@ async def generate_video(request: Request):
                 "operation_name": operation_name,
                 "user_id": user_id,
                 "session_id": session_id,
-                "created_at": datetime.now().isoformat()
+                "created_at": datetime.now().isoformat(),
+                "video_uri": video["video_uri"]  # Include the video URI immediately
             }
             
             # Start async video generation simulation
             asyncio.create_task(simulate_video_generation(operation_name, user_id, session_id))
             
-            return {
-                "status": "processing",
-                "operation_name": operation_name
-            }
+            return mock_operations[operation_name]  # Return the full response including video_uri
         else:
             # Original video generation code
             # Get user from request state
