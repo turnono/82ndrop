@@ -432,4 +432,4 @@ async def cancel_video_generation(operation_name: str, request: Request):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080))) 
