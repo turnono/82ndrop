@@ -1033,8 +1033,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         );
 
         // Store operation name and start polling
-        this.currentOperationName = response.operation_name;
-        this.startPolling();
+        this.startPolling(response.operation_name);
         return;
       }
 
@@ -1061,40 +1060,31 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     }
   }
 
-  private async startPolling(): Promise<void> {
-    // Clear any existing polling
+  private startPolling(operationName: string): void {
     if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
+      this.stopPolling();
     }
 
-    // Start polling every 5 seconds
+    this.currentOperationName = operationName;
     this.pollingInterval = setInterval(async () => {
       try {
-        if (!this.currentOperationName) {
+        const status = await this.agentService.checkVideoStatus(operationName);
+        
+        if (status.status === 'completed' && status.video_uri) {
+          // Stop polling when we get a successful completion
           this.stopPolling();
-          return;
-        }
-
-        const status = await this.agentService.checkVideoStatus(
-          this.currentOperationName
-        );
-
-        if (status.status === 'completed') {
-          await this.handleCompletedVideo(status);
+          this.handleCompletedVideo(status);
+        } else if (status.status === 'error' || status.error) {
+          // Stop polling on error
           this.stopPolling();
-        } else if (status.status === 'error') {
-          throw new Error(status.error || 'Video generation failed');
+          this.handleVideoError(status.error || 'Video generation failed');
         }
-        // Continue polling if still in_progress
+        // Continue polling only if status is 'in_progress'
       } catch (error) {
-        console.error('Error checking video status:', error);
-        this.addAgentMessage(
-          `❌ Video generation failed: ${
-            error instanceof Error ? error.message : 'Unknown error'
-          }`,
-          new Date().toISOString()
-        );
+        // Stop polling on error (like 404)
         this.stopPolling();
+        console.error('Error checking video status:', error);
+        this.handleVideoError('Failed to check video status');
       }
     }, 5000); // Poll every 5 seconds
   }
@@ -1105,29 +1095,25 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       this.pollingInterval = null;
     }
     this.currentOperationName = null;
-    this.isGeneratingVideo = false;
   }
 
-  private async handleCompletedVideo(
-    response: VideoGenerationResponse
-  ): Promise<void> {
-    // Get video URL from response - prefer transformed URL if available
-    const videoUrl = response.videoUrl || response.video_uri;
-    if (!videoUrl || typeof videoUrl !== 'string' || !videoUrl.trim()) {
-      throw new Error('Invalid or missing video URL in response');
-    }
+  private handleCompletedVideo(response: any): void {
+    const videoUrl = this.agentService.transformGcsUrl(response.video_uri);
+    console.log('Video generated successfully:', videoUrl);
+    this.isGeneratingVideo = false;
+    this.addAgentMessage(
+      `🎥 Video generated successfully! [Click here to view](${videoUrl})`,
+      new Date().toISOString()
+    );
+  }
 
-    // Transform GCS URL if needed (as a backup in case service didn't do it)
-    if (videoUrl.startsWith('gs://')) {
-      const withoutProtocol = videoUrl.replace('gs://', '');
-      const [bucket, ...pathParts] = withoutProtocol.split('/');
-      const path = pathParts.join('/');
-      this.generatedVideoUrl = `https://storage.cloud.google.com/${bucket}/${path}`;
-    } else {
-      this.generatedVideoUrl = videoUrl;
-    }
-
-    console.log('Video generated successfully:', this.generatedVideoUrl);
+  private handleVideoError(error: string): void {
+    console.error('Video generation error:', error);
+    this.isGeneratingVideo = false;
+    this.addAgentMessage(
+      `❌ Failed to generate video: ${error}`,
+      new Date().toISOString()
+    );
   }
 
   resetVideoGeneration() {
