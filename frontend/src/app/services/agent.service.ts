@@ -511,7 +511,7 @@ export class AgentService {
   /**
    * Transform a GCS URL to a cloud storage URL
    */
-  private transformGcsUrl(gcsUrl: string): string {
+  transformGcsUrl(gcsUrl: string): string {
     if (!gcsUrl) return '';
     if (!gcsUrl.startsWith('gs://')) return gcsUrl;
 
