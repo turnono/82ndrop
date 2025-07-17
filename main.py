@@ -1,26 +1,17 @@
 import os
 import logging
-from logging_config import APILogger
 import firebase_admin
 from firebase_admin import credentials, auth
-from fastapi import Request, HTTPException, FastAPI, Depends
+from fastapi import Request, HTTPException, FastAPI
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uvicorn
 from google.adk.cli.fast_api import get_fast_api_app
 from datetime import datetime
 from starlette.middleware.base import BaseHTTPMiddleware
 import vertexai
-from vertexai.generative_models import GenerativeModel
-import json
 import google.generativeai as genai
-import requests
-from google import genai
-from google.genai.types import GenerateVideosConfig
-import time
 import asyncio
 import random
-from typing import Dict
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -432,4 +423,4 @@ async def cancel_video_generation(operation_name: str, request: Request):
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8000)

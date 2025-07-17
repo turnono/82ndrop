@@ -7,6 +7,7 @@ import {
   AfterViewChecked,
   Output,
   EventEmitter,
+  inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -19,6 +20,7 @@ import { AuthService } from '../../services/auth.service';
 import { SessionHistoryService } from '../../services/session-history.service';
 import { Subscription, Observable } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
+import { AI, getImagenModel, ImagenModel } from '@angular/fire/ai';
 
 interface ChatMessage {
   type: 'user' | 'agent' | 'system' | 'progress';
@@ -67,49 +69,45 @@ interface ChatMessage {
               </div>
             </div>
 
-            <!-- Video generation prompt -->
-            <div
-              *ngIf="
-                message.type === 'agent' &&
-                !showGeneratePrompt &&
-                isAuthorizedForVideo()
-              "
-              class="video-generation-prompt"
-            >
-              <button
-                (click)="showGenerateVideoPrompt()"
-                class="generate-video-btn"
-              >
-                🎬 Generate Video
-              </button>
-            </div>
-
             <div class="message-timestamp">
               {{ formatTimestamp(message.timestamp) }}
             </div>
           </div>
         </div>
 
-        <!-- Video Generation UI -->
-        <div *ngIf="showGeneratePrompt" class="video-generation-container">
+        <!-- Generated Image Display -->
+        <div *ngIf="generatedImageUrl" class="video-result-container">
+          <div class="video-result-card">
+            <h3>✅ Image Generated Successfully!</h3>
+            <img [src]="generatedImageUrl" alt="Generated Image" class="generated-video" />
+          </div>
+        </div>
+
+        <!-- Image and Video Generation UI -->
+        <div *ngIf="showGenerateImagePrompt" class="video-generation-container">
           <div class="video-generation-card">
-            <h3>🎬 Generate Video from Prompt</h3>
+            <h3>🎬 Generate Image and Video</h3>
             <p>
-              Ready to create your video? Click the button below to start
+              Ready to create your image and video? Click the buttons below to start
               generation.
             </p>
 
             <div class="video-actions">
               <button
-                (click)="onGenerateVideoClick()"
+                (click)="onGenerateImageClick()"
                 class="primary-btn"
-                [disabled]="isGeneratingVideo"
+                [disabled]="isGeneratingImage || isGeneratingVideo"
               >
+                {{
+                  isGeneratingImage ? '🖼️ Generating...' : '🖼️ Generate Image'
+                }}
+              </button>
+              <button (click)="onGenerateVideoClick()" class="primary-btn" [disabled]="isGeneratingVideo || isGeneratingImage || !generatedImageUrl">
                 {{
                   isGeneratingVideo ? '🎬 Generating...' : '🎬 Generate Video'
                 }}
               </button>
-              <button (click)="resetVideoGeneration()" class="secondary-btn">
+              <button (click)="resetImageGeneration()" class="secondary-btn" [disabled]="isGeneratingImage || isGeneratingVideo">
                 Cancel
               </button>
             </div>
@@ -715,12 +713,18 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   isLoading = false;
   private shouldScrollToBottom = false;
 
-  // Add state for VEO3 video generation flow
+  // State for VEO video generation flow
   showGeneratePrompt = false;
   showApiKeyInput = false;
   veoApiKey = '';
   isGeneratingVideo = false;
   generatedVideoUrl: string | null = null;
+
+  // State for image generation flow
+  showGenerateImagePrompt = false;
+  isGeneratingImage = false;
+  generatedImageUrl: string | null = null;
+  imagePrompt: string | null = null;
 
   private currentOperationName: string | null = null;
   private pollingInterval: any = null;
@@ -728,6 +732,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   private subscriptions: Subscription[] = [];
 
   mockMode$: Observable<boolean>;
+  private ai = inject(AI);
+  private imagenModel!: ImagenModel;
 
   constructor(
     private agentService: AgentService,
@@ -738,6 +744,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   ngOnInit() {
+    this.imagenModel = getImagenModel(this.ai, {
+      model: 'imagen-3.0-generate-002',
+    });
+
     // Only get mock status if user is authorized
     if (this.isAuthorizedForVideo()) {
       this.agentService.getMockStatus().subscribe();
@@ -892,6 +902,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
                   const jsonContent = jsonMatch[1];
                   const parsedJson = JSON.parse(jsonContent);
                   this.promptGenerated.emit(parsedJson);
+                  if (this.isAuthorizedForVideo()) {
+                    this.imagePrompt = parsedJson.prompt;
+                    this.showGenerateImagePrompt = true;
+                  }
+                } else if (update.message.includes('Generate a single, cohesive vertical short-form video')) {
+                  if (this.isAuthorizedForVideo()) {
+                    this.imagePrompt = update.message;
+                    this.showGenerateImagePrompt = true;
+                  }
                 }
               } catch (e) {
                 console.log(
@@ -984,16 +1003,42 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     return user?.email === 'turnono@gmail.com';
   }
 
-  // Show video generation UI
-  showGenerateVideoPrompt() {
+  // Handle image generation
+  async onGenerateImageClick(): Promise<void> {
     if (!this.isAuthorizedForVideo()) {
       this.addAgentMessage(
-        'Sorry, video generation is currently restricted to authorized users only.',
+        'Sorry, you are not authorized to generate images.',
         new Date().toISOString()
       );
       return;
     }
-    this.showGeneratePrompt = true;
+    if (!this.imagePrompt) return;
+    this.isGeneratingImage = true;
+    this.generatedImageUrl = null;
+    try {
+      const result = await this.imagenModel.generateImages(this.imagePrompt);
+      if (result.filteredReason) {
+        console.log(result.filteredReason);
+      }
+      if (result.images?.length === 0) {
+        throw new Error('No images in the response.');
+      }
+      const image = result.images[0];
+      const rawBase64 = image.bytesBase64Encoded;
+      const mimeType = image.mimeType;
+      this.generatedImageUrl = `data:${mimeType};base64,${rawBase64}`;
+    } catch (e) {
+      console.error(e);
+    } finally {
+      this.isGeneratingImage = false;
+    }
+  }
+
+  resetImageGeneration() {
+    this.showGenerateImagePrompt = false;
+    this.isGeneratingImage = false;
+    this.generatedImageUrl = null;
+    this.imagePrompt = null;
   }
 
   // Handle video generation
@@ -1007,6 +1052,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     }
 
     this.isGeneratingVideo = true;
+    this.generatedVideoUrl = null;
 
     try {
       // Get the last agent message as the video prompt
@@ -1101,8 +1147,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     const videoUrl = this.agentService.transformGcsUrl(response.video_uri);
     console.log('Video generated successfully:', videoUrl);
     this.isGeneratingVideo = false;
+    this.generatedVideoUrl = videoUrl;
     this.addAgentMessage(
-      `🎥 Video generated successfully! [Click here to view](${videoUrl})`,
+      `🎥 Video generated successfully! You can now view or download the video.`,
       new Date().toISOString()
     );
   }

@@ -40,6 +40,14 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'ai-test',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+      import('./components/ai-test/ai-test.component').then(
+        (m) => m.AiTestComponent
+      ),
+  },
+  {
     path: '**',
     redirectTo: '',
   },

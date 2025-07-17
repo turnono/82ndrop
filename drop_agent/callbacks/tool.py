@@ -145,6 +145,7 @@ def after_tool_callback(
         logger.info(
             f"🔧 Completed tool execution: {tool_name} ({'✅' if success else '❌'}) in {execution_time:.2f}s"
         )
+        logger.info(f"Tool response: {response}")
 
         # Store performance metrics (only if we have a valid tool_context with state)
         if (

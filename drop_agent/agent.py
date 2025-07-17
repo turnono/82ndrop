@@ -1,6 +1,7 @@
 from google.adk import Agent
 from .sub_agents.guide.agent import guide_agent
 from .sub_agents.search.tools.search_tool import SearchEnhancementTool
+from .sub_agents.prompt_writer.agent import prompt_writer_agent
 from .prompts import ROOT_PROMPT
 from .callbacks import (
     before_agent_callback,
@@ -16,7 +17,7 @@ root_agent = Agent(
     name="drop_agent",
     model="gemini-2.0-flash",
     instruction=ROOT_PROMPT,
-    sub_agents=[guide_agent],  # Only use guide_agent as sub-agent
+    sub_agents=[guide_agent, prompt_writer_agent],  # Add prompt_writer_agent
     tools=[SearchEnhancementTool()],  # Use search enhancement tool
     output_key="prompt_response",
     before_agent_callback=before_agent_callback,
