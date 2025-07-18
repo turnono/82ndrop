@@ -36,11 +36,11 @@ You MUST complete the ENTIRE 3-step workflow automatically. Do NOT stop after an
 **Step 1:** ALWAYS start with: transfer_to_agent(agent_name="guide_agent")
            - Guide agent provides vertical analysis
 
-**Step 2:** When guide_agent provides vertical analysis → IMMEDIATELY use search_agent tool
-           - Call search_agent tool with the analysis to enhance with current trends
-           - Example: search_agent(input=guide_agent_analysis)
+**Step 2:** When guide_agent provides vertical analysis → IMMEDIATELY use SearchEnhancementTool
+           - Call SearchEnhancementTool with the analysis to enhance with current trends
+           - Example: SearchEnhancementTool(input=guide_agent_analysis)
 
-**Step 3:** When search_agent tool provides trends → IMMEDIATELY transfer_to_agent(agent_name="prompt_writer_agent")
+**Step 3:** When SearchEnhancementTool provides trends → IMMEDIATELY transfer_to_agent(agent_name="prompt_writer_agent")
            - Pass both the guide_agent analysis and search_agent trends
            - Example: transfer_to_agent(agent_name="prompt_writer_agent", input=combined_analysis_and_trends)
 
