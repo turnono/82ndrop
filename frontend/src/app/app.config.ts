@@ -3,7 +3,7 @@ import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 
 import { routes } from './app.routes';
-import { initializeApp } from '@angular/fire/app';
+import { getApp, initializeApp } from '@angular/fire/app';
 import { getFirestore } from '@angular/fire/firestore';
 import { getAuth } from '@angular/fire/auth';
 import { getFunctions } from '@angular/fire/functions';
@@ -24,6 +24,12 @@ import {
   ScreenTrackingService,
   UserTrackingService,
 } from '@angular/fire/analytics';
+import {
+  getAI,
+  provideAI,
+  VertexAIBackend,
+  GoogleAIBackend,
+} from '@angular/fire/ai';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -38,6 +44,13 @@ export const appConfig: ApplicationConfig = {
     provideStorage(() => getStorage()),
     provideDatabase(() => getDatabase()),
     provideAnalytics(() => getAnalytics()),
+    provideAI(() => {
+      const providedAI = getAI(getApp(), { backend: new VertexAIBackend() });
+      // const providedAI = getAI(getApp(), {
+      //   backend: new GoogleAIBackend(),
+      // });
+      return providedAI;
+    }),
     ScreenTrackingService,
     UserTrackingService,
   ],

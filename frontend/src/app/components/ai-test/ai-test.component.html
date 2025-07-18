@@ -1,0 +1,28 @@
+<div>
+  <h2>AI Test</h2>
+  <textarea [(ngModel)]="generativePrompt" placeholder="Enter your prompt"></textarea>
+  <button (click)="run(generativePrompt)" [disabled]="isLoading">Generate</button>
+  <div *ngIf="isLoading">Loading...</div>
+  <div *ngIf="generativeResult">
+    <h3>Result:</h3>
+    <p>{{ generativeResult }}</p>
+    <button (click)="generateImageFromTextResult()" [disabled]="isGeneratingImage">Generate Image</button>
+    <button [disabled]="true">Generate Video</button>
+    <div *ngIf="isGeneratingImage">Generating Image...</div>
+    <div *ngIf="generatedImageUrl">
+      <h4>Generated Image:</h4>
+      <img [src]="generatedImageUrl" alt="Generated from prompt" />
+    </div>
+  </div>
+</div>
+
+<div>
+  <h2>AI Imagen Test</h2>
+  <textarea [(ngModel)]="imagenPrompt" placeholder="Enter your prompt"></textarea>
+  <button (click)="runImagen(imagenPrompt)" [disabled]="isLoading">Generate</button>
+  <div *ngIf="isLoading">Loading...</div>
+  <div *ngIf="imagenResult">
+    <h3>Result:</h3>
+    <img [src]="imagenResult" alt="Generated Image" />
+  </div>
+</div>

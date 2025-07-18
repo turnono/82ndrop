@@ -29,9 +29,7 @@ guide_agent = Agent(
     
     Focus on blending the user's needs with trending elements in a cohesive 9:16 format.""",
     
-    # Include only prompt_writer_agent to avoid tool conflicts
-    sub_agents=[prompt_writer_agent],
-    
+    # Remove sub_agents to avoid circular dependency
     output_key="guide_analysis_response",
     before_agent_callback=before_agent_callback,
     after_agent_callback=after_agent_callback,

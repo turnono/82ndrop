@@ -13,6 +13,7 @@
       "$userId": {
         ".read": "auth != null && auth.uid == $userId",
         ".write": "auth != null && auth.uid == $userId",
+        ".indexOn": "updatedAt",
         "$sessionId": {
           ".validate": "newData.hasChildren(['title', 'userId', 'createdAt', 'updatedAt', 'messageCount']) && newData.child('userId').val() == $userId"
         }
