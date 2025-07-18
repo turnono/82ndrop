@@ -166,227 +166,84 @@ export class AgentService {
     }
   }
 
-  /**
-   * Send a message to the 82ndrop agent using ADK endpoints
-   */
-  async sendMessage(message: string): Promise<ChatResponse> {
-    try {
-      const headers = await this.getAuthHeaders();
-      const user = this.authService.getCurrentUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      // Create session if we don't have one
-      if (!this.currentSessionId) {
-        const session = await this.createSession();
-        this.currentSessionId = session.id;
-
-        // Sync session to Firebase for persistence
-        try {
-          await this.sessionHistoryService.createSession(
-            `Video Session - ${new Date().toLocaleDateString()}`,
-            session.id
-          );
-        } catch (firebaseError) {
-          console.warn(
-            'Firebase session sync failed (non-critical):',
-            firebaseError
-          );
-        }
-      }
-
-      const runRequest = {
-        appName: this.appName,
-        userId: user.uid,
-        sessionId: this.currentSessionId,
-        newMessage: {
-          role: 'user',
-          parts: [{ text: message }],
-        },
-      };
-
-      // Use the /run endpoint for better compatibility
-      const response = await this.http
-        .post<any>(`${this.apiUrl}/run`, runRequest, { headers })
-        .toPromise();
-
-      let agentContent = '';
-      let responseTimestamp = new Date().toISOString();
-
-      // Handle different response formats
-      if (Array.isArray(response)) {
-        // Look for the LAST agent response with actual text content (not function calls)
-        let finalTextResponse = null;
-        let workingAgents: string[] = [];
-
-        // Process all events to build workflow steps and find final response
-        for (const event of response) {
-          if (event.author !== 'user' && event.content) {
-            if (event.content.parts && event.content.parts[0]) {
-              const part = event.content.parts[0];
-
-              // Track function calls (workflow steps)
-              if (part.functionCall) {
-                const funcCall = part.functionCall;
-                const agentName = this.getAgentDisplayName(
-                  funcCall.args?.agent_name || funcCall.name
-                );
-                workingAgents.push(`🤖 ${agentName}`);
-              }
-              // Capture actual text responses
-              else if (part.text && part.text.trim()) {
-                finalTextResponse = {
-                  content: part.text,
-                  author: event.author,
-                  timestamp: event.timestamp,
-                };
-              }
-            }
-          }
-        }
-
-        // Use the final text response if we found one
-        if (finalTextResponse) {
-          agentContent = finalTextResponse.content;
-          responseTimestamp = finalTextResponse.timestamp || responseTimestamp;
-
-          // Add workflow context if we tracked working agents
-          if (workingAgents.length > 0) {
-            const workflowInfo = `🔄 **Workflow:** ${workingAgents.join(
-              ' → '
-            )}\n\n`;
-            agentContent = workflowInfo + agentContent;
-          }
-        } else if (workingAgents.length > 0) {
-          // If we only have function calls, show workflow status
-          agentContent = `🔄 **Multi-Agent Workflow Active**\n\n${workingAgents.join(
-            ' → '
-          )}\n\n⏳ Processing your request...`;
-        } else {
-          // Fallback to original logic
-          const agentResponse = response.find(
-            (event: any) => event.author !== 'user' && event.content
-          );
-          if (
-            agentResponse &&
-            agentResponse.content &&
-            agentResponse.content.parts &&
-            agentResponse.content.parts[0]
-          ) {
-            const part = agentResponse.content.parts[0];
-            agentContent = part.text || JSON.stringify(part, null, 2);
-            responseTimestamp = agentResponse.timestamp || responseTimestamp;
-          }
-        }
-      } else if (response && typeof response === 'object') {
-        agentContent =
-          response.response ||
-          response.content ||
-          response.message ||
-          JSON.stringify(response, null, 2);
-        responseTimestamp = response.timestamp || responseTimestamp;
-      } else if (typeof response === 'string') {
-        agentContent = response;
-      }
-
-      if (!agentContent) {
-        throw new Error('No valid response received from agent');
-      }
-
-      // Create a ChatResponse for backward compatibility
-      const chatResponse: ChatResponse = {
-        response: agentContent,
-        session_id: this.currentSessionId,
-        user_id: user.uid,
-        timestamp: responseTimestamp,
-      };
-
-      // Save messages to Firebase for persistence (non-critical)
-      try {
-        if (this.currentSessionId) {
-          // Save user message
-          await this.sessionHistoryService.saveMessage(this.currentSessionId, {
-            type: 'user',
-            content: message,
-          });
-
-          // Save agent response
-          await this.sessionHistoryService.saveMessage(this.currentSessionId, {
-            type: 'agent',
-            content: agentContent,
-          });
-        }
-      } catch (firebaseError) {
-        console.warn(
-          'Firebase message save failed (non-critical):',
-          firebaseError
-        );
-      }
-
-      return chatResponse;
-    } catch (error) {
-      console.error('Error sending message to agent:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Send a message to the 82ndrop agent using SSE for real-time updates
-   */
   async sendMessageWithSSE(
     message: string,
     onUpdate: (update: any) => void
   ): Promise<ChatResponse> {
-    try {
-      // For now, use a fallback approach with simulated progress updates
-      // since the server doesn't have a streaming endpoint yet
-      console.log(
-        'Using fallback approach with regular /run endpoint and simulated progress'
-      );
-
-      // Simulate workflow progress
-      onUpdate({
-        type: 'workflow_step',
-        message: 'Starting analysis...',
-        agents: ['🤖 Guide Agent'],
-        timestamp: new Date().toISOString(),
-      });
-
-      // Small delay to show progress
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      onUpdate({
-        type: 'workflow_step',
-        message: 'Searching for trends...',
-        agents: ['🤖 Guide Agent', '🤖 Search Agent'],
-        timestamp: new Date().toISOString(),
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      onUpdate({
-        type: 'workflow_step',
-        message: 'Creating composition...',
-        agents: ['🤖 Guide Agent', '🤖 Search Agent', '🤖 Prompt Writer Agent'],
-        timestamp: new Date().toISOString(),
-      });
-
-      // Use the existing working sendMessage method
-      const response = await this.sendMessage(message);
-
-      // Send final response update
-      onUpdate({
-        type: 'final_response',
-        message: response.response,
-        timestamp: response.timestamp,
-      });
-
-      return response;
-    } catch (error) {
-      console.error('Error sending message with SSE fallback:', error);
-      throw error;
+    const user = this.authService.getCurrentUser();
+    if (!user) {
+      throw new Error('User not authenticated');
     }
+
+    if (!this.currentSessionId) {
+      const session = await this.createSession();
+      this.currentSessionId = session.id;
+      await this.sessionHistoryService.createSession(
+        `Video Session - ${new Date().toLocaleDateString()}`,
+        session.id
+      );
+    }
+
+    const firebaseUser = this.authService.getFirebaseUser();
+    if (!firebaseUser) {
+      throw new Error('Firebase user not available');
+    }
+    const token = await firebaseUser.getIdToken();
+
+    const runRequest = {
+      appName: this.appName,
+      userId: user.uid,
+      sessionId: this.currentSessionId,
+      newMessage: {
+        role: 'user',
+        parts: [{ text: message }],
+      },
+      streaming: true,
+    };
+
+    const response = await fetch(`${this.apiUrl}/run_sse`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(runRequest),
+    });
+
+    if (!response.body) {
+      throw new Error('No response body');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let lastMessage = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const json = JSON.parse(line.substring(6));
+          onUpdate(json);
+          if (json.content && json.content.parts && json.content.parts[0] && json.content.parts[0].text) {
+            lastMessage = json.content.parts[0].text;
+          }
+        }
+      }
+    }
+
+    return {
+      response: lastMessage,
+      session_id: this.currentSessionId,
+      user_id: user.uid,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**

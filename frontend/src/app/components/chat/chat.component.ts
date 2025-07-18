@@ -79,7 +79,11 @@ interface ChatMessage {
         <div *ngIf="generatedImageUrl" class="video-result-container">
           <div class="video-result-card">
             <h3>✅ Image Generated Successfully!</h3>
-            <img [src]="generatedImageUrl" alt="Generated Image" class="generated-video" />
+            <img
+              [src]="generatedImageUrl"
+              alt="Generated Image"
+              class="generated-video"
+            />
           </div>
         </div>
 
@@ -88,8 +92,8 @@ interface ChatMessage {
           <div class="video-generation-card">
             <h3>🎬 Generate Image and Video</h3>
             <p>
-              Ready to create your image and video? Click the buttons below to start
-              generation.
+              Ready to create your image and video? Click the buttons below to
+              start generation.
             </p>
 
             <div class="video-actions">
@@ -102,12 +106,22 @@ interface ChatMessage {
                   isGeneratingImage ? '🖼️ Generating...' : '🖼️ Generate Image'
                 }}
               </button>
-              <button (click)="onGenerateVideoClick()" class="primary-btn" [disabled]="isGeneratingVideo || isGeneratingImage || !generatedImageUrl">
+              <button
+                (click)="onGenerateVideoClick()"
+                class="primary-btn"
+                [disabled]="
+                  isGeneratingVideo || isGeneratingImage || !generatedImageUrl
+                "
+              >
                 {{
                   isGeneratingVideo ? '🎬 Generating...' : '🎬 Generate Video'
                 }}
               </button>
-              <button (click)="resetImageGeneration()" class="secondary-btn" [disabled]="isGeneratingImage || isGeneratingVideo">
+              <button
+                (click)="resetImageGeneration()"
+                class="secondary-btn"
+                [disabled]="isGeneratingImage || isGeneratingVideo"
+              >
                 Cancel
               </button>
             </div>
@@ -166,7 +180,7 @@ interface ChatMessage {
   styles: [
     `
       .chat-container {
-        height: 100%;
+        height: 100dvh;
         display: flex;
         flex-direction: column;
         background: #f8f9fa;
@@ -194,6 +208,7 @@ interface ChatMessage {
         display: flex;
         flex-direction: column;
         gap: 16px;
+        max-height: 60% !important;
       }
 
       .message {
@@ -254,6 +269,10 @@ interface ChatMessage {
         padding: 20px;
         background: white;
         border-top: 1px solid #e9ecef;
+        flex-shrink: 0;
+        bottom: 0;
+        position: fixed;
+        width: 100%;
       }
 
       .input-wrapper {
@@ -262,6 +281,7 @@ interface ChatMessage {
         align-items: flex-end;
         max-width: 800px;
         margin: 0 auto;
+        min-width: 90% !important;
       }
 
       .message-input {
@@ -273,6 +293,7 @@ interface ChatMessage {
         font-size: 16px;
         resize: none;
         transition: border-color 0.2s;
+        max-width: 74% !important;
       }
 
       .message-input:focus {
@@ -503,6 +524,16 @@ interface ChatMessage {
         .json-block {
           padding: 20px;
           font-size: 14px;
+        }
+      }
+
+      @media (min-width: 768px) {
+        .input-wrapper {
+          min-width: 90% !important;
+        }
+
+        .message-input[_ngcontent-ng-c1996228786] {
+          max-width: 58% !important;
         }
       }
 
@@ -855,6 +886,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.shouldScrollToBottom = true;
   }
 
+  prettifyAgentName(name: string): string {
+    return name.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+  }
+
   async sendMessage() {
     if (!this.currentMessage.trim() || this.isLoading) {
       return;
@@ -885,45 +920,63 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
           // Update progress message in real-time
           const progressIndex = this.messages.length - 1;
           if (this.messages[progressIndex]?.type === 'progress') {
-            if (update.type === 'workflow_step') {
-              this.messages[progressIndex].content = update.message;
-              this.messages[progressIndex].workflowSteps = update.agents;
-            } else if (update.type === 'final_response') {
-              // Remove progress message and add final response
-              this.messages.splice(progressIndex, 1);
-              this.addAgentMessage(update.message, update.timestamp);
-
-              // Check if response contains JSON and emit it
-              try {
-                const jsonMatch = update.message.match(
-                  /```json\s*([\s\S]*?)\s*```/
-                );
-                if (jsonMatch) {
-                  const jsonContent = jsonMatch[1];
-                  const parsedJson = JSON.parse(jsonContent);
-                  this.promptGenerated.emit(parsedJson);
-                  if (this.isAuthorizedForVideo()) {
-                    this.imagePrompt = parsedJson.prompt;
-                    this.showGenerateImagePrompt = true;
-                  }
-                } else if (update.message.includes('Generate a single, cohesive vertical short-form video')) {
-                  if (this.isAuthorizedForVideo()) {
-                    this.imagePrompt = update.message;
-                    this.showGenerateImagePrompt = true;
-                  }
+            const workflowSteps =
+              this.messages[progressIndex].workflowSteps || [];
+            if (update.content && update.content.parts) {
+              const part = update.content.parts[0];
+              if (part.functionCall) {
+                const step = `Calling: ${part.functionCall.name}`;
+                if (workflowSteps[workflowSteps.length - 1] !== step) {
+                  workflowSteps.push(step);
                 }
-              } catch (e) {
-                console.log(
-                  'Response does not contain valid JSON, continuing normally'
-                );
+              }
+            } else if (update.author) {
+              const step = `Running: ${this.prettifyAgentName(update.author)}`;
+              if (workflowSteps[workflowSteps.length - 1] !== step) {
+                workflowSteps.push(step);
               }
             }
+            this.messages[progressIndex].workflowSteps = workflowSteps;
             this.shouldScrollToBottom = true;
           }
         }
       );
 
-      console.log('SSE Response received:', response);
+      // Remove progress message and add final response
+      const progressIndex = this.messages.findIndex(
+        (m) => m.type === 'progress'
+      );
+      if (progressIndex >= 0) {
+        this.messages.splice(progressIndex, 1);
+      }
+      this.addAgentMessage(response.response, response.timestamp);
+
+      // Check if response contains JSON and emit it
+      try {
+        const jsonMatch = response.response.match(/```json\s*([\s\S]*?)\s*```/);
+        if (jsonMatch) {
+          const jsonContent = jsonMatch[1];
+          const parsedJson = JSON.parse(jsonContent);
+          this.promptGenerated.emit(parsedJson);
+          if (this.isAuthorizedForVideo()) {
+            this.imagePrompt = parsedJson.prompt;
+            this.showGenerateImagePrompt = true;
+          }
+        } else if (
+          response.response.includes(
+            'Generate a single, cohesive vertical short-form video'
+          )
+        ) {
+          if (this.isAuthorizedForVideo()) {
+            this.imagePrompt = response.response;
+            this.showGenerateImagePrompt = true;
+          }
+        }
+      } catch (e) {
+        console.log(
+          'Response does not contain valid JSON, continuing normally'
+        );
+      }
     } catch (error) {
       console.error('Error sending message:', error);
 
@@ -1115,7 +1168,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.pollingInterval = setInterval(async () => {
       try {
         const status = await this.agentService.checkVideoStatus(operationName);
-        
+
         if (status.status === 'completed' && status.video_uri) {
           // Stop polling when we get a successful completion
           this.stopPolling();
