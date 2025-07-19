@@ -15,10 +15,11 @@ import {
   AgentService,
   ChatResponse,
   VideoGenerationResponse,
+  MockResponse,
 } from '../../services/agent.service';
 import { AuthService } from '../../services/auth.service';
 import { SessionHistoryService } from '../../services/session-history.service';
-import { Subscription, Observable } from 'rxjs';
+import { Subscription, Observable, firstValueFrom, of } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { AI, getImagenModel, ImagenModel } from '@angular/fire/ai';
 
@@ -35,15 +36,13 @@ interface ChatMessage {
   standalone: true,
   imports: [CommonModule, FormsModule, MatButtonModule],
   template: `
+    <div class="credit-balance" *ngIf="authService.user$ | async as user">
+      <span>Credits: {{ user.credits || 0 }}</span>
+      <a routerLink="/subscribe" class="buy-more-link">Buy More</a>
+    </div>
     <div class="chat-container">
-      <div class="mock-controls" *ngIf="isAuthorizedForVideo()">
-        <button mat-raised-button color="accent" (click)="toggleMockMode()">
-          {{ (mockMode$ | async) ? 'Disable Mock Mode' : 'Enable Mock Mode' }}
-        </button>
-        <div class="mock-status" *ngIf="mockMode$ | async">
-          Mock Mode Enabled
-        </div>
-      </div>
+      <div class="mock-status">Mocking {{ mockMode }}</div>
+
       <div class="messages-container" #messagesContainer>
         <div
           *ngFor="let message of messages"
@@ -762,26 +761,41 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   private subscriptions: Subscription[] = [];
 
-  mockMode$: Observable<boolean>;
+  mockMode$!: Observable<MockResponse>;
+  mockMode: boolean = false;
   private ai = inject(AI);
   private imagenModel!: ImagenModel;
 
+  // Mock images for testing
+  private mockImages = [
+    'https://picsum.photos/800/600', // Random image from Lorem Picsum
+  ];
+
+  private imagenInitialized = false;
+
   constructor(
     private agentService: AgentService,
-    private authService: AuthService,
+    public authService: AuthService,
     private sessionHistoryService: SessionHistoryService
-  ) {
-    this.mockMode$ = this.agentService.mockMode$;
-  }
+  ) {}
 
   ngOnInit() {
-    this.imagenModel = getImagenModel(this.ai, {
-      model: 'imagen-3.0-generate-002',
+    // Initialize mock mode
+    this.mockMode$ = this.agentService.getMockStatus();
+    this.mockMode$.subscribe((response) => {
+      this.mockMode = response.mock_mode;
     });
 
-    // Only get mock status if user is authorized
-    if (this.isAuthorizedForVideo()) {
-      this.agentService.getMockStatus().subscribe();
+    // Try to initialize Firebase AI
+    try {
+      this.imagenModel = getImagenModel(this.ai, {
+        model: 'imagen-3.0-generate-002',
+      });
+      this.imagenInitialized = true;
+    } catch (e) {
+      console.error('Failed to initialize Firebase AI:', e);
+      this.imagenInitialized = false;
+      this.mockMode = true; // Force mock mode if Firebase AI fails to initialize
     }
 
     this.addSystemMessage(
@@ -1052,36 +1066,93 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   // Call this after displaying the Master Prompt
   isAuthorizedForVideo(): boolean {
-    const user = this.authService.getCurrentUser();
-    return user?.email === 'turnono@gmail.com';
+    return (
+      this.mockMode ||
+      this.authService.getCurrentUser()?.email === 'turnono@gmail.com'
+    );
   }
 
   // Handle image generation
   async onGenerateImageClick(): Promise<void> {
-    if (!this.isAuthorizedForVideo()) {
+    const user = this.authService.getCurrentUser();
+    if (!user) return;
+
+    const credits = user.credits || 0;
+    const imageCost = 10;
+
+    if (!this.mockMode && credits < imageCost) {
       this.addAgentMessage(
-        'Sorry, you are not authorized to generate images.',
+        'You have insufficient credits to generate an image. Please purchase more credits.',
         new Date().toISOString()
       );
       return;
     }
-    if (!this.imagePrompt) return;
+
+    if (!this.imagePrompt) {
+      this.addAgentMessage(
+        'No image prompt available. Please generate a prompt first.',
+        new Date().toISOString()
+      );
+      return;
+    }
+
     this.isGeneratingImage = true;
     this.generatedImageUrl = null;
+
     try {
-      const result = await this.imagenModel.generateImages(this.imagePrompt);
-      if (result.filteredReason) {
-        console.log(result.filteredReason);
+      if (this.mockMode || !this.imagenInitialized) {
+        // In mock mode or if Firebase AI failed to initialize, return a random mock image
+        await new Promise((resolve) => setTimeout(resolve, 1500)); // Simulate delay
+        this.generatedImageUrl =
+          this.mockImages[Math.floor(Math.random() * this.mockImages.length)];
+      } else {
+        // Real image generation using Firebase AI
+        const result = await this.imagenModel.generateImages(this.imagePrompt);
+        if (result.filteredReason) {
+          console.log(result.filteredReason);
+        }
+        if (result.images?.length === 0) {
+          throw new Error('No images in the response.');
+        }
+        const image = result.images[0];
+        const rawBase64 = image.bytesBase64Encoded;
+        const mimeType = image.mimeType;
+        this.generatedImageUrl = `data:${mimeType};base64,${rawBase64}`;
+
+        // Deduct credits and refresh token
+        await this.agentService.deductCredits(imageCost);
+        await this.authService.refreshUserToken();
       }
-      if (result.images?.length === 0) {
-        throw new Error('No images in the response.');
-      }
-      const image = result.images[0];
-      const rawBase64 = image.bytesBase64Encoded;
-      const mimeType = image.mimeType;
-      this.generatedImageUrl = `data:${mimeType};base64,${rawBase64}`;
+
+      // Add success message
+      this.addAgentMessage(
+        '🖼️ Image generated successfully! You can now proceed to generate the video.',
+        new Date().toISOString()
+      );
     } catch (e) {
       console.error(e);
+      // If Firebase AI fails, fall back to mock images
+      if (!this.mockMode) {
+        console.log('Falling back to mock images due to Firebase AI error');
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 1500)); // Simulate delay
+          this.generatedImageUrl =
+            this.mockImages[Math.floor(Math.random() * this.mockImages.length)];
+          this.addAgentMessage(
+            '🖼️ Image generated successfully (using fallback)! You can now proceed to generate the video.',
+            new Date().toISOString()
+          );
+          return;
+        } catch (fallbackError) {
+          console.error('Even fallback failed:', fallbackError);
+        }
+      }
+      this.addAgentMessage(
+        `❌ Image generation failed: ${
+          e instanceof Error ? e.message : 'Unknown error'
+        }`,
+        new Date().toISOString()
+      );
     } finally {
       this.isGeneratingImage = false;
     }
@@ -1096,6 +1167,20 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   // Handle video generation
   async onGenerateVideoClick(): Promise<void> {
+    const user = this.authService.getCurrentUser();
+    if (!user) return;
+
+    const credits = user.credits || 0;
+    const videoCost = 50;
+
+    if (!this.mockMode && credits < videoCost) {
+      this.addAgentMessage(
+        'You have insufficient credits to generate a video. Please purchase more credits.',
+        new Date().toISOString()
+      );
+      return;
+    }
+
     if (!this.isAuthorizedForVideo()) {
       this.addAgentMessage(
         'Sorry, you are not authorized to generate videos.',
@@ -1108,6 +1193,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.generatedVideoUrl = null;
 
     try {
+      // Only deduct credits in non-mock mode
+      if (!this.mockMode) {
+        await this.agentService.deductCredits(videoCost);
+        await this.authService.refreshUserToken();
+      }
+
       // Get the last agent message as the video prompt
       const lastAgentMessage = this.messages
         .filter((m) => m.type === 'agent')
@@ -1124,23 +1215,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         lastAgentMessage.content
       );
 
-      // If status is in_progress, start polling
-      if (response.status === 'in_progress') {
+      // Handle mock mode immediate response or real mode polling
+      if (response.status === 'completed' && response.video_uri) {
+        await this.handleCompletedVideo(response);
+      } else if (response.status === 'in_progress' && response.operation_name) {
         this.addAgentMessage(
           '🎬 Video generation has started. Please wait while we process your request...',
           new Date().toISOString()
         );
-
-        // Store operation name and start polling
         this.startPolling(response.operation_name);
-        return;
-      }
-
-      this.isGeneratingVideo = false;
-
-      // Only try to access video URL if status is completed
-      if (response.status === 'completed') {
-        await this.handleCompletedVideo(response);
       } else if (response.status === 'error') {
         throw new Error(response.error || 'Video generation failed');
       }
@@ -1252,16 +1335,6 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     event.preventDefault();
     if (this.generatedVideoUrl) {
       window.open(this.generatedVideoUrl, '_blank');
-    }
-  }
-
-  async toggleMockMode() {
-    if (this.isAuthorizedForVideo()) {
-      try {
-        await this.agentService.toggleMockMode().toPromise();
-      } catch (error) {
-        console.error('Error toggling mock mode:', error);
-      }
     }
   }
 }

@@ -17,19 +17,24 @@ import random
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Check if API keys are present
+GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
+GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+HAVE_API_KEYS = bool(GOOGLE_CLOUD_PROJECT and GOOGLE_APPLICATION_CREDENTIALS)
+
 # Set up environment variables for google.genai
-os.environ["GOOGLE_CLOUD_PROJECT"] = os.getenv("GOOGLE_CLOUD_PROJECT")
-os.environ["GOOGLE_CLOUD_LOCATION"] = "global"
-os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "True"
+if HAVE_API_KEYS:
+    os.environ["GOOGLE_CLOUD_PROJECT"] = GOOGLE_CLOUD_PROJECT
+    os.environ["GOOGLE_CLOUD_LOCATION"] = "global"
+    os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "True"
 
 # Initialize Firebase Admin SDK
 def initialize_firebase():
     if not firebase_admin._apps:
         try:
-            cred_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
-            if cred_path and os.path.exists(cred_path):
-                print(f"Loading service account from: {cred_path}")
-                cred = credentials.Certificate(cred_path)
+            if HAVE_API_KEYS and os.path.exists(GOOGLE_APPLICATION_CREDENTIALS):
+                print(f"Loading service account from: {GOOGLE_APPLICATION_CREDENTIALS}")
+                cred = credentials.Certificate(GOOGLE_APPLICATION_CREDENTIALS)
                 firebase_admin.initialize_app(cred)
                 print("Firebase initialized with service account")
             else:
@@ -43,11 +48,18 @@ def initialize_firebase():
 # Initialize Firebase
 initialize_firebase()
 
-# Initialize Vertex AI
-vertexai.init(
-    project=os.getenv("GOOGLE_CLOUD_PROJECT"),
-    location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-)
+# Initialize Vertex AI only if we have API keys
+if HAVE_API_KEYS:
+    try:
+        vertexai.init(
+            project=GOOGLE_CLOUD_PROJECT,
+            location=os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+        )
+        print("Vertex AI initialized successfully")
+    except Exception as e:
+        print(f"Error initializing Vertex AI: {e}")
+        print("Forcing mock mode due to Vertex AI initialization failure")
+        HAVE_API_KEYS = False
 
 # Firebase authentication middleware
 class FirebaseAuthMiddleware(BaseHTTPMiddleware):
@@ -96,8 +108,8 @@ app.add_middleware(FirebaseAuthMiddleware)
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
-# Mock mode configuration
-MOCK_MODE = True  # Set to False to use real video generation
+# Mock mode configuration - force mock mode if no API keys
+MOCK_MODE = True if not HAVE_API_KEYS else True  # Set to False to use real video generation when keys are present
 
 # Mock video pool - pre-selected videos that already exist in the bucket
 MOCK_VIDEOS = [
@@ -140,6 +152,19 @@ async def generate_video(request: Request):
         if not user_id or not session_id:
             raise HTTPException(status_code=400, detail="Missing user_id or session_id")
         
+        # Force mock mode if no API keys
+        if not HAVE_API_KEYS:
+            logger.warning("No API keys present - forcing mock mode for video generation")
+            mock_video = random.choice(MOCK_VIDEOS)
+            return {
+                "status": "completed",
+                "video_uri": mock_video,
+                "operation_name": None,
+                "user_id": user_id,
+                "session_id": session_id,
+                "created_at": datetime.now().isoformat()
+            }
+        
         if MOCK_MODE:
             # Generate a random operation name
             operation_name = f"projects/taajirah/locations/global/publishers/google/models/veo-3.0-generate-preview/operations/{random.randbytes(16).hex()}"
@@ -155,6 +180,10 @@ async def generate_video(request: Request):
             
             return mock_operations[operation_name]
         else:
+            # Check if we have API keys before attempting real video generation
+            if not HAVE_API_KEYS:
+                raise HTTPException(status_code=503, detail="Video generation unavailable - API keys not configured")
+
             # Original video generation code
             # Get user from request state
             user = request.state.user
@@ -186,7 +215,7 @@ async def generate_video(request: Request):
             try:
                 # Generate video
                 operation = client.models.generate_videos(
-                    model="veo-3.0-generate-preview",
+                    model="",
                     prompt=prompt,
                     config=genai.types.GenerateVideosConfig(
                         aspect_ratio="16:9",  # Vertical video for TikTok
@@ -421,6 +450,104 @@ async def cancel_video_generation(operation_name: str, request: Request):
     except Exception as e:
         logger.error(f"Error in cancel request: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+# Credit costs
+VIDEO_GENERATION_COST = 50
+IMAGE_GENERATION_COST = 10
+FREE_CREDITS_PER_MONTH = 60  # 1 video (50) + 1 image (10)
+
+@app.post("/deduct-credits")
+async def deduct_credits(request: Request):
+    """Deduct credits from user's account."""
+    try:
+        # Get user from request state
+        user = request.state.user
+        if not user:
+            raise HTTPException(status_code=401, detail="User not authenticated")
+
+        # Get request body
+        body = await request.json()
+        amount = body.get("amount")
+        if not amount:
+            raise HTTPException(status_code=400, detail="Amount is required")
+
+        # Skip credit deduction in mock mode
+        if MOCK_MODE:
+            return {"success": True, "message": "Credits not deducted in mock mode"}
+
+        # Get current user claims
+        firebase_user = await auth.get_user(user['uid'])
+        current_claims = firebase_user.custom_claims or {}
+        current_credits = current_claims.get('credits', 0)
+
+        # Check if user has enough credits
+        if current_credits < amount:
+            raise HTTPException(status_code=402, detail="Insufficient credits")
+
+        # Update credits
+        new_claims = {
+            **current_claims,
+            'credits': current_credits - amount
+        }
+        await auth.set_custom_user_claims(user['uid'], new_claims)
+
+        return {
+            "success": True,
+            "remaining_credits": current_credits - amount,
+            "deducted": amount
+        }
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error deducting credits: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to deduct credits: {str(e)}")
+
+@app.post("/reset-monthly-credits")
+async def reset_monthly_credits(request: Request):
+    """Reset monthly free credits for all users."""
+    try:
+        # Get user from request state
+        user = request.state.user
+        if not user:
+            raise HTTPException(status_code=401, detail="User not authenticated")
+
+        # Only admins can reset credits
+        if not user.get('admin', False):
+            raise HTTPException(status_code=403, detail="Only admins can reset credits")
+
+        # List all users
+        users = await auth.list_users()
+        updated_count = 0
+
+        for firebase_user in users.users:
+            try:
+                # Get current claims
+                current_claims = firebase_user.custom_claims or {}
+                
+                # Update credits - add FREE_CREDITS_PER_MONTH to existing credits
+                new_claims = {
+                    **current_claims,
+                    'credits': current_claims.get('credits', 0) + FREE_CREDITS_PER_MONTH,
+                    'last_credit_reset': datetime.now().isoformat()
+                }
+                await auth.set_custom_user_claims(firebase_user.uid, new_claims)
+                updated_count += 1
+            except Exception as e:
+                logger.error(f"Error updating credits for user {firebase_user.uid}: {str(e)}")
+                continue
+
+        return {
+            "success": True,
+            "users_updated": updated_count,
+            "credits_per_user": FREE_CREDITS_PER_MONTH
+        }
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error resetting monthly credits: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset credits: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

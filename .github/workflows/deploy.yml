@@ -108,7 +108,7 @@ jobs:
       - name: Deploy frontend to Firebase Hosting
         run: |
           cd frontend
-          firebase deploy --only hosting:82ndrop --project=${{ secrets.GOOGLE_CLOUD_PROJECT }}
+          firebase deploy --only hosting:82ndrop,functions,firestore,storage,database --project=${{ secrets.GOOGLE_CLOUD_PROJECT }}
 
   notify-success:
     name: Notify Success
