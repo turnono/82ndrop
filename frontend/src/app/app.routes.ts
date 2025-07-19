@@ -48,6 +48,14 @@ export const routes: Routes = [
       ),
   },
   {
+    path: 'subscribe',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+      import('./components/subscribe/subscribe.component').then(
+        (m) => m.SubscribeComponent
+      ),
+  },
+  {
     path: '**',
     redirectTo: '',
   },

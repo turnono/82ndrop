@@ -35,7 +35,11 @@ interface ChatMessage {
   standalone: true,
   imports: [CommonModule, FormsModule, MatButtonModule],
   template: `
-    <div class="chat-container">
+    <div class="credit-balance" *ngIf="authService.user$ | async as user">
+  <span>Credits: {{ user.credits || 0 }}</span>
+  <a routerLink="/subscribe" class="buy-more-link">Buy More</a>
+</div>
+<div class="chat-container">
       <div class="mock-controls" *ngIf="isAuthorizedForVideo()">
         <button mat-raised-button color="accent" (click)="toggleMockMode()">
           {{ (mockMode$ | async) ? 'Disable Mock Mode' : 'Enable Mock Mode' }}
@@ -768,7 +772,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   constructor(
     private agentService: AgentService,
-    private authService: AuthService,
+    public authService: AuthService,
     private sessionHistoryService: SessionHistoryService
   ) {
     this.mockMode$ = this.agentService.mockMode$;
@@ -1058,6 +1062,20 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   // Handle image generation
   async onGenerateImageClick(): Promise<void> {
+    const user = this.authService.getCurrentUser();
+    if (!user) return;
+
+    const credits = user.credits || 0;
+    const imageCost = 10;
+
+    if (credits < imageCost) {
+      this.addAgentMessage(
+        'You have insufficient credits to generate an image. Please purchase more credits.',
+        new Date().toISOString()
+      );
+      return;
+    }
+
     if (!this.isAuthorizedForVideo()) {
       this.addAgentMessage(
         'Sorry, you are not authorized to generate images.',
@@ -1080,6 +1098,11 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       const rawBase64 = image.bytesBase64Encoded;
       const mimeType = image.mimeType;
       this.generatedImageUrl = `data:${mimeType};base64,${rawBase64}`;
+      
+      // Deduct credits and refresh token
+      await this.agentService.deductCredits(imageCost);
+      await this.authService.refreshUserToken();
+
     } catch (e) {
       console.error(e);
     } finally {
@@ -1096,6 +1119,20 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   // Handle video generation
   async onGenerateVideoClick(): Promise<void> {
+    const user = this.authService.getCurrentUser();
+    if (!user) return;
+
+    const credits = user.credits || 0;
+    const videoCost = 50;
+
+    if (credits < videoCost) {
+      this.addAgentMessage(
+        'You have insufficient credits to generate a video. Please purchase more credits.',
+        new Date().toISOString()
+      );
+      return;
+    }
+
     if (!this.isAuthorizedForVideo()) {
       this.addAgentMessage(
         'Sorry, you are not authorized to generate videos.',
@@ -1108,6 +1145,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.generatedVideoUrl = null;
 
     try {
+      // Deduct credits and refresh token before starting the long process
+      await this.agentService.deductCredits(videoCost);
+      await this.authService.refreshUserToken();
+
       // Get the last agent message as the video prompt
       const lastAgentMessage = this.messages
         .filter((m) => m.type === 'agent')

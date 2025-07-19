@@ -1,0 +1,26 @@
+<div class="subscribe-container">
+  <div class="header">
+    <h1>Get Credits</h1>
+    <p>Your first 50 credits are on us! After that, choose a package that works for you.</p>
+  </div>
+  <div class="credit-options">
+    <div class="credit-option">
+      <h3>100 Credits</h3>
+      <p class="price">R100</p>
+      <button class="purchase-btn" (click)="purchaseCredits(100)">Purchase</button>
+    </div>
+    <div class="credit-option">
+      <h3>500 Credits</h3>
+      <p class="price">R450</p>
+      <button class="purchase-btn" (click)="purchaseCredits(450)">Purchase</button>
+    </div>
+    <div class="credit-option">
+      <h3>1000 Credits</h3>
+      <p class="price">R800</p>
+      <button class="purchase-btn" (click)="purchaseCredits(800)">Purchase</button>
+    </div>
+  </div>
+  <a routerLink="/dashboard" class="back-link">Back to Dashboard</a>
+</div>
+
+
