@@ -3,41 +3,16 @@
  * User access management and authentication functions
  */
 
-const { initializeApp } = require("firebase-admin/app");
-const { setGlobalOptions } = require("firebase-functions");
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onRequest } = require("firebase-functions/v2/https");
 const { getAuth } = require("firebase-admin/auth");
-const { REGION } = require("./config");
 const crypto = require("crypto");
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
   admin.initializeApp();
 }
-
-// Set global options for cost control
-setGlobalOptions({ maxInstances: 10 });
-
-// Import and export our custom functions
-const autoGrantAccess = require("./auto-grant-access");
-const setUserClaims = require("./set-user-claims");
-const grantUserAccess = require("./grant-user-access");
-
-// Export auto-grant access functions
-exports.autoGrantAccess = autoGrantAccess.autoGrantAccess;
-exports.grantAccessManual = autoGrantAccess.grantAccessManual;
-exports.checkAndGrantAccess = autoGrantAccess.checkAndGrantAccess;
-
-// Export user claims management functions
-exports.grantAgentAccess = setUserClaims.grantAgentAccess;
-exports.revokeAgentAccess = setUserClaims.revokeAgentAccess;
-exports.onUserCreate = setUserClaims.onUserCreate;
-
-// Export manual user access functions
-exports.grantUserAccess = grantUserAccess.grantUserAccess;
-exports.createTestUser = grantUserAccess.createTestUser;
 
 // Credit packages
 const CREDIT_PACKAGES = {
@@ -51,7 +26,7 @@ const CREDIT_PACKAGES = {
  */
 exports.initializePayment = onCall(
   {
-    region: REGION,
+    region: "us-central1",
     maxInstances: 10,
   },
   async (request) => {
@@ -119,9 +94,12 @@ exports.initializePayment = onCall(
 /**
  * Handle Paystack webhook
  */
-exports.paystackWebhook = functions
-  .region(REGION)
-  .https.onRequest(async (request, response) => {
+exports.paystackWebhook = onRequest(
+  {
+    region: "us-central1",
+    maxInstances: 10,
+  },
+  async (request, response) => {
     try {
       // Verify Paystack signature
       const hash = crypto
@@ -171,4 +149,5 @@ exports.paystackWebhook = functions
       console.error("Error processing webhook:", error);
       response.status(500).send(error.message);
     }
-  });
+  }
+);
