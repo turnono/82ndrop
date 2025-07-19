@@ -89,6 +89,11 @@ jobs:
           cd frontend
           npm ci
 
+      - name: Install Firebase Functions dependencies
+        run: |
+          cd frontend/functions
+          npm ci
+
       - name: Build frontend
         env:
           STAGING_API_URL: https://drop-agent-staging-${{ secrets.GOOGLE_CLOUD_PROJECT }}.${{ secrets.GOOGLE_CLOUD_LOCATION }}.run.app
