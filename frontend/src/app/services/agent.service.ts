@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, BehaviorSubject, throwError } from 'rxjs';
+import { Observable, BehaviorSubject, throwError, firstValueFrom } from 'rxjs';
 import { catchError, switchMap } from 'rxjs/operators';
 import { AuthService } from './auth.service';
 import { SessionHistoryService } from './session-history.service';
@@ -67,7 +67,7 @@ export interface VideoGenerationResponse {
   error?: string; // For error messages when status is 'error'
 }
 
-interface MockResponse {
+export interface MockResponse {
   mock_mode: boolean;
   message: string;
 }
@@ -83,10 +83,6 @@ export class AgentService {
   // Observable for chat messages
   private messagesSubject = new BehaviorSubject<any[]>([]);
   public messages$ = this.messagesSubject.asObservable();
-
-  // Mock mode state
-  private mockModeSubject = new BehaviorSubject<boolean>(true);
-  mockMode$ = this.mockModeSubject.asObservable();
 
   constructor(
     private http: HttpClient,
@@ -122,9 +118,9 @@ export class AgentService {
   async getUserProfile(): Promise<UserProfile> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await this.http
-        .get<UserProfile>(`${this.apiUrl}/user/profile`, { headers })
-        .toPromise();
+      const response = await firstValueFrom(
+        this.http.get<UserProfile>(`${this.apiUrl}/user/profile`, { headers })
+      );
       if (!response) {
         throw new Error('No response received from server');
       }
@@ -147,13 +143,13 @@ export class AgentService {
       }
 
       const userId = user.uid;
-      const response = await this.http
-        .post<Session>(
+      const response = await firstValueFrom(
+        this.http.post<Session>(
           `${this.apiUrl}/apps/${this.appName}/users/${userId}/sessions`,
           {},
           { headers }
         )
-        .toPromise();
+      );
 
       if (!response) {
         throw new Error('Failed to create session');
@@ -231,7 +227,12 @@ export class AgentService {
         if (line.startsWith('data: ')) {
           const json = JSON.parse(line.substring(6));
           onUpdate(json);
-          if (json.content && json.content.parts && json.content.parts[0] && json.content.parts[0].text) {
+          if (
+            json.content &&
+            json.content.parts &&
+            json.content.parts[0] &&
+            json.content.parts[0].text
+          ) {
             lastMessage = json.content.parts[0].text;
           }
         }
@@ -244,6 +245,28 @@ export class AgentService {
       user_id: user.uid,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  async initializePayment(email: string, amount: number): Promise<any> {
+    const headers = await this.getAuthHeaders();
+    return firstValueFrom(
+      this.http.post<any>(
+        `${this.apiUrl}/initialize-payment`,
+        { email, amount },
+        { headers }
+      )
+    );
+  }
+
+  async deductCredits(amount: number): Promise<any> {
+    const headers = await this.getAuthHeaders();
+    return firstValueFrom(
+      this.http.post<any>(
+        `${this.apiUrl}/deduct-credits`,
+        { amount },
+        { headers }
+      )
+    );
   }
 
   /**
@@ -297,12 +320,12 @@ export class AgentService {
         throw new Error('User not authenticated');
       }
 
-      const response = await this.http
-        .get<Session[]>(
+      const response = await firstValueFrom(
+        this.http.get<Session[]>(
           `${this.apiUrl}/apps/${this.appName}/users/${user.uid}/sessions`,
           { headers }
         )
-        .toPromise();
+      );
 
       return response || [];
     } catch (error) {
@@ -322,12 +345,12 @@ export class AgentService {
         throw new Error('User not authenticated');
       }
 
-      return this.http
-        .delete(
+      return firstValueFrom(
+        this.http.delete(
           `${this.apiUrl}/apps/${this.appName}/users/${user.uid}/sessions/${sessionId}`,
           { headers }
         )
-        .toPromise();
+      );
     } catch (error) {
       console.error('Error deleting session:', error);
       throw error;
@@ -340,8 +363,9 @@ export class AgentService {
   async checkHealth(): Promise<any> {
     try {
       const headers = await this.getAuthHeaders();
-      // Use list-apps endpoint as a health check since /health doesn't exist in ADK
-      return this.http.get(`${this.apiUrl}/list-apps`, { headers }).toPromise();
+      return firstValueFrom(
+        this.http.get(`${this.apiUrl}/list-apps`, { headers })
+      );
     } catch (error) {
       console.error('Error checking API health:', error);
       throw error;
@@ -354,9 +378,9 @@ export class AgentService {
   async listApps(): Promise<string[]> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await this.http
-        .get<string[]>(`${this.apiUrl}/list-apps`, { headers })
-        .toPromise();
+      const response = await firstValueFrom(
+        this.http.get<string[]>(`${this.apiUrl}/list-apps`, { headers })
+      );
 
       return response || [];
     } catch (error) {
@@ -390,7 +414,11 @@ export class AgentService {
       throw new Error('User not authenticated');
     }
 
-    if (user.email !== 'turnono@gmail.com') {
+    // Get mock status
+    const mockStatus = await firstValueFrom(this.getMockStatus());
+
+    // Only check email authorization in non-mock mode
+    if (!mockStatus.mock_mode && user.email !== 'turnono@gmail.com') {
       throw new Error('User not authorized for video generation');
     }
 
@@ -400,8 +428,8 @@ export class AgentService {
     }
 
     const headers = await this.getAuthHeaders();
-    const response = await this.http
-      .post<VideoGenerationResponse>(
+    const response = await firstValueFrom(
+      this.http.post<VideoGenerationResponse>(
         `${this.apiUrl}/generate-video`,
         {
           prompt,
@@ -410,13 +438,12 @@ export class AgentService {
         },
         { headers }
       )
-      .toPromise();
+    );
 
     if (!response) {
       throw new Error('No response received from video generation');
     }
 
-    // Transform the video URL if it exists in the response
     if (response.video_uri) {
       response.videoUrl = this.transformGcsUrl(response.video_uri);
     }
@@ -430,9 +457,9 @@ export class AgentService {
   async checkVideoStatus(jobId: string): Promise<any> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await this.http
-        .get<any>(`${this.apiUrl}/video-status/${jobId}`, { headers })
-        .toPromise();
+      const response = await firstValueFrom(
+        this.http.get<any>(`${this.apiUrl}/video-status/${jobId}`, { headers })
+      );
 
       return response;
     } catch (error) {
@@ -447,9 +474,13 @@ export class AgentService {
   async cancelVideoGeneration(jobId: string): Promise<any> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await this.http
-        .post<any>(`${this.apiUrl}/cancel-video/${jobId}`, {}, { headers })
-        .toPromise();
+      const response = await firstValueFrom(
+        this.http.post<any>(
+          `${this.apiUrl}/cancel-video/${jobId}`,
+          {},
+          { headers }
+        )
+      );
 
       return response;
     } catch (error) {
@@ -458,32 +489,11 @@ export class AgentService {
     }
   }
 
-  // Toggle mock mode
-  toggleMockMode(): Observable<MockResponse> {
-    return from(this.getAuthHeaders()).pipe(
-      switchMap((headers) =>
-        this.http
-          .post<MockResponse>(`${this.apiUrl}/toggle-mock`, {}, { headers })
-          .pipe(
-            tap((response) => {
-              this.mockModeSubject.next(response.mock_mode);
-            })
-          )
-      )
-    );
-  }
-
   // Get mock mode status
   getMockStatus(): Observable<MockResponse> {
     return from(this.getAuthHeaders()).pipe(
       switchMap((headers) =>
-        this.http
-          .get<MockResponse>(`${this.apiUrl}/mock-status`, { headers })
-          .pipe(
-            tap((response) => {
-              this.mockModeSubject.next(response.mock_mode);
-            })
-          )
+        this.http.get<MockResponse>(`${this.apiUrl}/mock-status`, { headers })
       )
     );
   }
