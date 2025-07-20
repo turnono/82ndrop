@@ -4,7 +4,7 @@ const { onRequest } = require("firebase-functions/v2/https");
 const cors = require("cors")({
   origin: [
     "http://localhost:4200",
-    "https://taajirah.net",
+    "https://taajirah.web.app",
     "https://82ndrop.web.app",
     "https://82ndrop-staging.web.app",
   ],

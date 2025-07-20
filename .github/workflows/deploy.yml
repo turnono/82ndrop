@@ -111,6 +111,11 @@ jobs:
           npm run build
 
       - name: Deploy frontend to Firebase Hosting
+        env:
+          PAYSTACK_SECRET_KEY: ${{ secrets.PAYSTACK_LIVE_SECRET_KEY }}
+          PAYSTACK_PUBLIC_KEY: ${{ secrets.PAYSTACK_LIVE_PUBLIC_KEY }}
+          FRONTEND_URL: https://${{ secrets.GOOGLE_CLOUD_PROJECT }}.web.app
+          NODE_ENV: production
         run: |
           cd frontend
           firebase deploy --only hosting:82ndrop,functions,firestore,storage,database --project=${{ secrets.GOOGLE_CLOUD_PROJECT }}
