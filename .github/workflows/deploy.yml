@@ -111,6 +111,8 @@ jobs:
           npm run build
 
       - name: Deploy frontend to Firebase Hosting
+        env:
+          REGION: us-central1
         run: |
           cd frontend
           firebase deploy --only hosting:82ndrop,functions,firestore,storage,database --project=${{ secrets.GOOGLE_CLOUD_PROJECT }}

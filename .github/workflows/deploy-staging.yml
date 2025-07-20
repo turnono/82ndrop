@@ -102,6 +102,8 @@ jobs:
           npm run build:staging
 
       - name: Deploy frontend to Firebase Hosting (Staging)
+        env:
+          REGION: us-central1
         run: |
           cd frontend
           firebase deploy --only hosting:82ndrop-staging,functions,firestore,storage,database --project=${{ secrets.GOOGLE_CLOUD_PROJECT }}
