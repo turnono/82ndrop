@@ -39,73 +39,114 @@ exports.onUserCreate = setUserClaims.onUserCreate;
 // Export functions from grant-user-access.js
 exports.grantUserAccess = grantUserAccess.grantUserAccess;
 
+const cors = require("cors")({
+  origin: [
+    "http://localhost:4200",
+    "https://taajirah.web.app",
+    "https://82ndrop.web.app",
+    "https://82ndrop-staging.web.app",
+  ],
+});
+
+// Function to get the environment from the request origin
+const getEnvironmentFromOrigin = (origin) => {
+  if (
+    origin === "https://taajirah.web.app" ||
+    origin === "https://82ndrop.web.app"
+  ) {
+    return "production";
+  }
+  // Default to staging for localhost or staging-specific URLs
+  return "staging";
+};
+
+// Function to get the correct Paystack secret key based on the environment
+const getPaystackSecretKey = (env) => {
+  console.log("env: ", process.env);
+  if (env === "production") {
+    return process.env.PAYSTACK_LIVE_SECRET_KEY;
+  }
+  return process.env.PAYSTACK_SANDBOX_SECRET_KEY;
+};
+
 /**
  * Initialize Paystack payment
  */
-exports.initializePayment = onCall(
+exports.initializePayment = onRequest(
   {
     region: "us-central1",
     maxInstances: 10,
+    secrets: ["PAYSTACK_LIVE_SECRET_KEY", "PAYSTACK_SANDBOX_SECRET_KEY"],
   },
-  async (request) => {
-    try {
-      const { email, amount } = request.data;
-      const { uid } = request.auth;
+  (request, response) => {
+    cors(request, response, async () => {
+      try {
+        // Securely determine environment from request origin
+        const environment = getEnvironmentFromOrigin(request.headers.origin);
 
-      if (!email || !amount) {
-        throw new HttpsError(
-          "invalid-argument",
-          "Email and amount are required"
-        );
-      }
-
-      // Validate amount matches a credit package
-      const package = CREDIT_PACKAGES[amount];
-      if (!package) {
-        throw new HttpsError(
-          "invalid-argument",
-          "Invalid credit package amount"
-        );
-      }
-
-      // Initialize payment with Paystack
-      const response = await fetch(
-        "https://api.paystack.co/transaction/initialize",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email,
-            amount: package.amount, // Amount in cents
-            callback_url: `${process.env.FRONTEND_URL}/dashboard`,
-            metadata: {
-              uid,
-              credits: package.credits,
-              custom_fields: [
-                {
-                  display_name: "Credits",
-                  variable_name: "credits",
-                  value: package.credits,
-                },
-              ],
-            },
-          }),
+        // Verify Firebase ID token
+        const idToken = request.headers.authorization?.split("Bearer ")[1];
+        if (!idToken) {
+          response.status(401).send("Unauthorized");
+          return;
         }
-      );
+        const decodedToken = await getAuth().verifyIdToken(idToken);
+        const uid = decodedToken.uid;
 
-      const data = await response.json();
-      if (!data.status) {
-        throw new Error(data.message);
+        const { email, amount } = request.body;
+
+        if (!email || !amount) {
+          response.status(400).send("Email and amount are required");
+          return;
+        }
+
+        // Validate amount matches a credit package
+        const creditPackage = CREDIT_PACKAGES[amount];
+        if (!creditPackage) {
+          response.status(400).send("Invalid credit package amount");
+          return;
+        }
+
+        // Initialize payment with Paystack
+        const paystackResponse = await fetch(
+          "https://api.paystack.co/transaction/initialize",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${getPaystackSecretKey(environment)}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              email,
+              amount: creditPackage.amount, // Amount in cents
+              callback_url: `${process.env.FRONTEND_URL}/dashboard`,
+              metadata: {
+                uid,
+                credits: creditPackage.credits,
+                environment, // Pass securely determined environment
+                custom_fields: [
+                  {
+                    display_name: "Credits",
+                    variable_name: "credits",
+                    value: creditPackage.credits,
+                  },
+                ],
+              },
+            }),
+          }
+        );
+
+        const data = await paystackResponse.json();
+        if (!data.status) {
+          throw new Error(data.message);
+        }
+
+        response.status(200).send(data);
+      } catch (error) {
+        console.error("Error initializing payment:", error);
+        response.status(500).send(error.message);
       }
-
-      return data;
-    } catch (error) {
-      console.error("Error initializing payment:", error);
-      throw new HttpsError("internal", error.message);
-    }
+    });
   }
 );
 
@@ -116,12 +157,16 @@ exports.paystackWebhook = onRequest(
   {
     region: "us-central1",
     maxInstances: 10,
+    secrets: ["PAYSTACK_LIVE_SECRET_KEY", "PAYSTACK_SANDBOX_SECRET_KEY"],
   },
   async (request, response) => {
     try {
-      // Verify Paystack signature
+      // Get environment from the transaction metadata
+      const environment = request.body.data.metadata.environment;
+
+      // Verify Paystack signature using the correct key
       const hash = crypto
-        .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
+        .createHmac("sha512", getPaystackSecretKey(environment))
         .update(JSON.stringify(request.body))
         .digest("hex");
 
