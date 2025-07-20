@@ -22,6 +22,7 @@ import { SessionHistoryService } from '../../services/session-history.service';
 import { Subscription, Observable, firstValueFrom, of } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { AI, getImagenModel, ImagenModel } from '@angular/fire/ai';
+import { RouterModule } from '@angular/router';
 
 interface ChatMessage {
   type: 'user' | 'agent' | 'system' | 'progress';
@@ -34,7 +35,7 @@ interface ChatMessage {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule],
+  imports: [CommonModule, FormsModule, MatButtonModule, RouterModule],
   template: `
     <div class="credit-balance" *ngIf="authService.user$ | async as user">
       <span>Credits: {{ user.credits || 0 }}</span>
@@ -729,6 +730,41 @@ interface ChatMessage {
           padding: 14px 28px;
           font-size: 15px;
         }
+      }
+
+      .credit-balance {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: white;
+        border-bottom: 1px solid #e9ecef;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .buy-more-link {
+        display: inline-block;
+        padding: 8px 16px;
+        background: #1976d2;
+        color: white;
+        text-decoration: none;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        transition: background-color 0.2s ease;
+        border: none;
+        cursor: pointer;
+      }
+
+      .buy-more-link:hover {
+        background: #1565c0;
+        text-decoration: none;
+        color: white;
+      }
+
+      .buy-more-link:active {
+        background: #0d47a1;
       }
     `,
   ],
