@@ -7,12 +7,21 @@ const admin = require("firebase-admin");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onRequest } = require("firebase-functions/v2/https");
 const { getAuth } = require("firebase-admin/auth");
+const { defineString } = require("firebase-functions/params");
 const crypto = require("crypto");
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
   admin.initializeApp();
 }
+
+// Define region for better control
+const REGION = defineString("REGION", { default: "us-central1" });
+
+// Import functions from other files
+const autoGrantAccess = require("./auto-grant-access");
+const setUserClaims = require("./set-user-claims");
+const grantUserAccess = require("./grant-user-access");
 
 // Credit packages
 const CREDIT_PACKAGES = {
@@ -21,12 +30,25 @@ const CREDIT_PACKAGES = {
   800: { credits: 1000, amount: 80000 }, // R800 = 80000 cents
 };
 
+// Export functions from auto-grant-access.js
+exports.autoGrantAccess = autoGrantAccess.autoGrantAccess;
+exports.grantAccessManual = autoGrantAccess.grantAccessManual;
+exports.checkAndGrantAccess = autoGrantAccess.checkAndGrantAccess;
+
+// Export functions from set-user-claims.js
+exports.grantAgentAccess = setUserClaims.grantAgentAccess;
+exports.revokeAgentAccess = setUserClaims.revokeAgentAccess;
+exports.onUserCreate = setUserClaims.onUserCreate;
+
+// Export functions from grant-user-access.js
+exports.grantUserAccess = grantUserAccess.grantUserAccess;
+
 /**
  * Initialize Paystack payment
  */
 exports.initializePayment = onCall(
   {
-    region: "us-central1",
+    region: REGION,
     maxInstances: 10,
   },
   async (request) => {
@@ -96,7 +118,7 @@ exports.initializePayment = onCall(
  */
 exports.paystackWebhook = onRequest(
   {
-    region: "us-central1",
+    region: REGION,
     maxInstances: 10,
   },
   async (request, response) => {
