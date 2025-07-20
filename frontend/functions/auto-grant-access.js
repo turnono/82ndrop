@@ -1,7 +1,6 @@
 const { getAuth } = require("firebase-admin/auth");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onRequest } = require("firebase-functions/v2/https");
-const { defineString } = require("firebase-functions/params");
 const cors = require("cors")({
   origin: [
     "http://localhost:4200",
@@ -11,16 +10,13 @@ const cors = require("cors")({
   ],
 });
 
-// Define region for better control
-const REGION = defineString("REGION", { default: "us-central1" });
-
 /**
  * Automatically grant basic agent access to new users
  * This can be triggered by user creation or called manually
  */
 exports.autoGrantAccess = onRequest(
   {
-    region: REGION,
+    region: "us-central1",
     maxInstances: 10,
   },
   (request, response) => {
@@ -76,7 +72,7 @@ exports.autoGrantAccess = onRequest(
  */
 exports.grantAccessManual = onCall(
   {
-    region: REGION,
+    region: "us-central1",
     maxInstances: 10,
   },
   async (request) => {
@@ -124,7 +120,7 @@ exports.grantAccessManual = onCall(
  */
 exports.checkAndGrantAccess = onRequest(
   {
-    region: REGION,
+    region: "us-central1",
     maxInstances: 10,
   },
   (request, response) => {

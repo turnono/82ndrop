@@ -7,16 +7,12 @@ const admin = require("firebase-admin");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onRequest } = require("firebase-functions/v2/https");
 const { getAuth } = require("firebase-admin/auth");
-const { defineString } = require("firebase-functions/params");
 const crypto = require("crypto");
 
 // Initialize Firebase Admin
 if (!admin.apps.length) {
   admin.initializeApp();
 }
-
-// Define region for better control
-const REGION = defineString("REGION", { default: "us-central1" });
 
 // Import functions from other files
 const autoGrantAccess = require("./auto-grant-access");
@@ -48,7 +44,7 @@ exports.grantUserAccess = grantUserAccess.grantUserAccess;
  */
 exports.initializePayment = onCall(
   {
-    region: REGION,
+    region: "us-central1",
     maxInstances: 10,
   },
   async (request) => {
@@ -118,7 +114,7 @@ exports.initializePayment = onCall(
  */
 exports.paystackWebhook = onRequest(
   {
-    region: REGION,
+    region: "us-central1",
     maxInstances: 10,
   },
   async (request, response) => {

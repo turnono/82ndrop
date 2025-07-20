@@ -103,7 +103,7 @@ jobs:
 
       - name: Deploy frontend to Firebase Hosting (Staging)
         env:
-          REGION: us-central1
+          STAGING_API_URL: https://drop-agent-staging-${{ secrets.GOOGLE_CLOUD_PROJECT }}.${{ secrets.GOOGLE_CLOUD_LOCATION }}.run.app
         run: |
           cd frontend
           firebase deploy --only hosting:82ndrop-staging,functions,firestore,storage,database --project=${{ secrets.GOOGLE_CLOUD_PROJECT }}
