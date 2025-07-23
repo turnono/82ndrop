@@ -174,7 +174,7 @@ export class AgentService {
   ): Promise<ChatResponse> {
     const user = this.authService.getCurrentUser();
     if (!user) {
-      throw new Error('User not authenticated');
+      throw new Error("User not authenticated");
     }
 
     if (!this.currentSessionId) {
@@ -184,75 +184,91 @@ export class AgentService {
 
     const firebaseUser = this.authService.getFirebaseUser();
     if (!firebaseUser) {
-      throw new Error('Firebase user not available');
+      throw new Error("Firebase user not available");
     }
-
     const token = await firebaseUser.getIdToken();
-    const headers = new HttpHeaders({
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    });
 
-    const requestBody: AgentRunRequest = {
-      appName: this.appName,
-      userId: user.uid,
-      sessionId: this.currentSessionId,
-      newMessage: {
+    const requestBody = {
+      app_name: this.appName,
+      user_id: user.uid,
+      session_id: this.currentSessionId,
+      new_message: {
         role: 'user',
         parts: [{ text: message }],
       },
     };
 
-    return new Promise((resolve, reject) => {
-      const eventSource = new EventSource(
-        `${this.apiUrl}/apps/${this.appName}/users/${user.uid}/sessions/${this.currentSessionId}/runs/stream`
-      );
-
-      let lastMessage = '';
-
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          onUpdate(data);
-
-          if (data.type === 'message') {
-            lastMessage = data.content;
-          }
-
-          if (data.type === 'end') {
-            eventSource.close();
-            resolve({
-              response: lastMessage,
-              session_id: this.currentSessionId!,
-              user_id: user.uid,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        } catch (error) {
-          console.error('Error parsing SSE data:', error);
-        }
-      };
-
-      eventSource.onerror = (error) => {
-        console.error('SSE error:', error);
-        eventSource.close();
-        reject(error);
-      };
-
-      // Send the initial request
-      this.http
-        .post(
-          `${this.apiUrl}/apps/${this.appName}/users/${user.uid}/sessions/${this.currentSessionId}/runs`,
-          requestBody,
-          { headers }
-        )
-        .subscribe({
-          error: (error) => {
-            console.error('Error starting agent run:', error);
-            eventSource.close();
-            reject(error);
+    return new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${this.apiUrl}/run_sse`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
           },
+          body: JSON.stringify(requestBody),
         });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('Failed to get response reader');
+        }
+
+        const decoder = new TextDecoder();
+        let lastMessage = '';
+        let buffer = '';
+
+        const processStream = async () => {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              break;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data:')) {
+                try {
+                  const json = line.substring(5).trim();
+                  if (json) {
+                    const data = JSON.parse(json);
+                    onUpdate(data);
+
+                    if (data.type === 'message') {
+                      lastMessage = data.content;
+                    }
+
+                    if (data.type === 'end') {
+                      resolve({
+                        response: lastMessage,
+                        session_id: this.currentSessionId!,
+                        user_id: user.uid,
+                        timestamp: new Date().toISOString(),
+                      });
+                      return;
+                    }
+                  }
+                } catch (error) {
+                  console.error('Error parsing SSE data:', error);
+                }
+              }
+            }
+          }
+        };
+
+        processStream().catch(reject);
+
+      } catch (error) {
+        console.error('SSE fetch error:', error);
+        reject(error);
+      }
     });
   }
 
