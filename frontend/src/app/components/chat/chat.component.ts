@@ -940,7 +940,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     return name.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
   }
 
-  async sendMessage() {
+  sendMessage() {
     if (!this.currentMessage.trim() || this.isLoading) {
       return;
     }
@@ -949,102 +949,52 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.currentMessage = '';
     this.isLoading = true;
 
-    // Add user message
     this.addUserMessage(userMessage);
 
-    // Add progress message that will be updated in real-time
     const progressMessage: ChatMessage = {
       type: 'progress',
-      content: 'Starting analysis...',
+      content: 'Agent is thinking...',
       timestamp: new Date().toISOString(),
       workflowSteps: [],
     };
     this.messages.push(progressMessage);
     this.shouldScrollToBottom = true;
 
-    try {
-      // Use SSE for real-time updates
-      const response = await this.agentService.sendMessageWithSSE(
-        userMessage,
-        (update) => {
-          // Update progress message in real-time
-          const progressIndex = this.messages.length - 1;
-          if (this.messages[progressIndex]?.type === 'progress') {
-            const workflowSteps =
-              this.messages[progressIndex].workflowSteps || [];
-            if (update.content && update.content.parts) {
-              const part = update.content.parts[0];
-              if (part.functionCall) {
-                const step = `Calling: ${part.functionCall.name}`;
-                if (workflowSteps[workflowSteps.length - 1] !== step) {
-                  workflowSteps.push(step);
-                }
-              }
-            } else if (update.author) {
-              const step = `Running: ${this.prettifyAgentName(update.author)}`;
-              if (workflowSteps[workflowSteps.length - 1] !== step) {
-                workflowSteps.push(step);
-              }
-            }
-            this.messages[progressIndex].workflowSteps = workflowSteps;
-            this.shouldScrollToBottom = true;
+    const onUpdate = (update: any) => {
+      const progressIndex = this.messages.findIndex(m => m.type === 'progress');
+      if (progressIndex !== -1) {
+        const workflowSteps = this.messages[progressIndex].workflowSteps || [];
+        if (update.author) {
+          const step = `Running: ${this.prettifyAgentName(update.author)}`;
+          if (!workflowSteps.includes(step)) {
+            workflowSteps.push(step);
           }
         }
-      );
+        this.messages[progressIndex].workflowSteps = workflowSteps;
+        this.shouldScrollToBottom = true;
+      }
+    };
 
-      // Remove progress message and add final response
-      const progressIndex = this.messages.findIndex(
-        (m) => m.type === 'progress'
-      );
-      if (progressIndex >= 0) {
+    const onComplete = (finalResponse: ChatResponse) => {
+      const progressIndex = this.messages.findIndex(m => m.type === 'progress');
+      if (progressIndex !== -1) {
         this.messages.splice(progressIndex, 1);
       }
-      this.addAgentMessage(response.response, response.timestamp);
-
-      // Check if response contains JSON and emit it
-      try {
-        const jsonMatch = response.response.match(/```json\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-          const jsonContent = jsonMatch[1];
-          const parsedJson = JSON.parse(jsonContent);
-          this.promptGenerated.emit(parsedJson);
-          if (this.isAuthorizedForVideo()) {
-            this.imagePrompt = parsedJson.prompt;
-            this.showGenerateImagePrompt = true;
-          }
-        } else if (
-          response.response.includes(
-            'Generate a single, cohesive vertical short-form video'
-          )
-        ) {
-          if (this.isAuthorizedForVideo()) {
-            this.imagePrompt = response.response;
-            this.showGenerateImagePrompt = true;
-          }
-        }
-      } catch (e) {
-        console.log(
-          'Response does not contain valid JSON, continuing normally'
-        );
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-
-      // Remove progress message and show error
-      const progressIndex = this.messages.findIndex(
-        (m) => m.type === 'progress'
-      );
-      if (progressIndex >= 0) {
-        this.messages.splice(progressIndex, 1);
-      }
-
-      this.addAgentMessage(
-        'Sorry, I encountered an error while processing your request. Please try again.',
-        new Date().toISOString()
-      );
-    } finally {
+      this.addAgentMessage(finalResponse.response, finalResponse.timestamp);
       this.isLoading = false;
-    }
+    };
+
+    const onError = (error: any) => {
+      console.error('Error sending message:', error);
+      const progressIndex = this.messages.findIndex(m => m.type === 'progress');
+      if (progressIndex !== -1) {
+        this.messages.splice(progressIndex, 1);
+      }
+      this.addAgentMessage('Sorry, an error occurred. Please try again.', new Date().toISOString());
+      this.isLoading = false;
+    };
+
+    this.agentService.sendMessageWithSSE(userMessage, onUpdate, onComplete, onError);
   }
 
   onEnterKey(event: KeyboardEvent) {

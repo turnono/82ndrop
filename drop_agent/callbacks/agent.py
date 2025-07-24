@@ -54,6 +54,14 @@ def after_agent_callback(callback_context: CallbackContext) -> None:
             logger.info(f"✅ Agent processing completed in {duration:.2f}s")
         else:
             logger.info("✅ Agent processing completed")
+
+        # Manually send the turn_complete event to close the SSE stream
+        if hasattr(callback_context, 'sse_writer'):
+            callback_context.sse_writer.write_event(
+                event_name="agent_event",
+                data={"turn_complete": True}
+            )
+            logger.info("Sent turn_complete event to client")
             
     except Exception as e:
         logger.error(f"Error in after_agent_callback: {e}")

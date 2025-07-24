@@ -170,8 +170,10 @@ export class AgentService {
 
   async sendMessageWithSSE(
     message: string,
-    onUpdate: (update: any) => void
-  ): Promise<ChatResponse> {
+    onUpdate: (update: any) => void,
+    onComplete: (finalResponse: ChatResponse) => void,
+    onError: (error: any) => void
+  ): Promise<void> {
     const user = this.authService.getCurrentUser();
     if (!user) {
       throw new Error("User not authenticated");
@@ -198,78 +200,75 @@ export class AgentService {
       },
     };
 
-    return new Promise(async (resolve, reject) => {
-      try {
-        const response = await fetch(`${this.apiUrl}/run_sse`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(requestBody),
-        });
+    try {
+      const response = await fetch(`${this.apiUrl}/run_sse`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error('Failed to get response reader');
-        }
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Failed to get response reader');
+      }
 
-        const decoder = new TextDecoder();
-        let lastMessage = '';
-        let buffer = '';
+      const decoder = new TextDecoder();
+      let lastMessage = '';
+      let buffer = '';
 
-        const processStream = async () => {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              break;
-            }
+      const processStream = async () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            // The stream has finished.
+            // If a final message was captured, we can consider it complete.
+            onComplete({
+              response: lastMessage,
+              session_id: this.currentSessionId!,
+              user_id: user.uid,
+              timestamp: new Date().toISOString(),
+            });
+            break;
+          }
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
 
-            for (const line of lines) {
-              if (line.startsWith('data:')) {
-                try {
-                  const json = line.substring(5).trim();
-                  if (json) {
-                    const data = JSON.parse(json);
-                    onUpdate(data);
+          for (const line of lines) {
+            if (line.startsWith('data:')) {
+              try {
+                const json = line.substring(5).trim();
+                if (json) {
+                  const data = JSON.parse(json);
+                  onUpdate(data);
 
-                    if (data.type === 'message') {
-                      lastMessage = data.content;
-                    }
-
-                    if (data.type === 'end') {
-                      resolve({
-                        response: lastMessage,
-                        session_id: this.currentSessionId!,
-                        user_id: user.uid,
-                        timestamp: new Date().toISOString(),
-                      });
-                      return;
-                    }
+                  // Capture the last text message as the potential final response
+                  if (data.content && data.content.parts && data.content.parts[0] && data.content.parts[0].text) {
+                    lastMessage = data.content.parts[0].text;
                   }
-                } catch (error) {
-                  console.error('Error parsing SSE data:', error);
                 }
+              } catch (error) {
+                console.error('Error parsing SSE data:', error);
               }
             }
           }
-        };
+        }
+      };
 
-        processStream().catch(reject);
+      processStream().catch(onError);
 
-      } catch (error) {
-        console.error('SSE fetch error:', error);
-        reject(error);
-      }
-    });
+    } catch (error) {
+      console.error('SSE fetch error:', error);
+      onError(error);
+    }
   }
 
   async initializePayment(email: string, amount: number): Promise<any> {
