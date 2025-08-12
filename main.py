@@ -8,6 +8,9 @@ import uvicorn
 from google.adk.cli.fast_api import get_fast_api_app
 from datetime import datetime
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
+from time import time
 import vertexai
 import google.generativeai as genai
 import asyncio
@@ -103,6 +106,22 @@ app: FastAPI = get_fast_api_app(
 # Add Firebase authentication middleware
 app.add_middleware(FirebaseAuthMiddleware)
 
+# Simple fixed-window rate limiter per IP (very conservative defaults)
+RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "60"))  # reqs
+RATE_LIMIT_WINDOW_SEC = int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60"))  # per seconds
+_RATE_BUCKET = {}
+
+@app.middleware("http")
+async def rate_limiter(request: Request, call_next):
+    client_ip = request.client.host if request.client else "unknown"
+    now = int(time())
+    key = (client_ip, now // RATE_LIMIT_WINDOW_SEC)
+    count = _RATE_BUCKET.get(key, 0) + 1
+    _RATE_BUCKET[key] = count
+    if count > RATE_LIMIT_REQUESTS:
+        return JSONResponse(status_code=429, content={"detail": "Too Many Requests"})
+    return await call_next(request)
+
 # Health check endpoint (no auth required)
 @app.get("/health")
 async def health_check():
@@ -150,6 +169,10 @@ mock_operations = {}
 @app.post("/toggle-mock")
 async def toggle_mock(request: Request):
     """Toggle mock mode on/off."""
+    # Only admins can toggle mock mode
+    user = getattr(request.state, "user", None)
+    if not user or not user.get("admin", False):
+        raise HTTPException(status_code=403, detail="Only admins can toggle mock mode")
     global MOCK_MODE
     MOCK_MODE = not MOCK_MODE
     return {

@@ -23,6 +23,7 @@ import { Subscription, Observable, firstValueFrom, of } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { AI, getImagenModel, ImagenModel } from '@angular/fire/ai';
 import { RouterModule } from '@angular/router';
+import { environment } from '../../../environments/environment';
 
 interface ChatMessage {
   type: 'user' | 'agent' | 'system' | 'progress';
@@ -1060,7 +1061,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   isAuthorizedForVideo(): boolean {
     return (
       this.mockMode ||
-      this.authService.getCurrentUser()?.email === 'turnono@gmail.com'
+      (!!this.authService.getCurrentUser()?.email &&
+        environment.allowlistedVideoUsers.includes(
+          this.authService.getCurrentUser()!.email!
+        ))
     );
   }
 

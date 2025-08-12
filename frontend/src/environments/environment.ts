@@ -1,6 +1,9 @@
 export const environment = {
   production: true,
   apiUrl: 'https://drop-agent-service-855515190257.us-central1.run.app', // ADK service with analytics
+  allowlistedVideoUsers: [
+    'turnono@gmail.com',
+  ],
   paystack: {
     publicKey: 'pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // Replace with your Paystack public key
     secretKey: 'sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // Replace with your Paystack secret key
