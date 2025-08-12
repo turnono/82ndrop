@@ -89,12 +89,19 @@ jobs:
           PAYSTACK_SANDBOX_SECRET_KEY: ${{ secrets.PAYSTACK_SANDBOX_SECRET_KEY }}
           PAYSTACK_LIVE_SECRET_KEY: ${{ secrets.PAYSTACK_LIVE_SECRET_KEY }}
         run: |
-          # Create or update required secrets so deployment validation passes
-          # These commands are idempotent; they add a new version if changed
+          # Try to set required secrets. If this fails due to IAM, we'll skip deploying functions.
+          set +e
           echo -n "$PAYSTACK_SANDBOX_SECRET_KEY" | firebase functions:secrets:set PAYSTACK_SANDBOX_SECRET_KEY --project=${{ secrets.GOOGLE_CLOUD_PROJECT }} --data-file=-
-          # Provide live key as well since the function declares both secrets
-          # If you don't have live yet, set a placeholder to satisfy validation
+          EC1=$?
           echo -n "${PAYSTACK_LIVE_SECRET_KEY:-placeholder}" | firebase functions:secrets:set PAYSTACK_LIVE_SECRET_KEY --project=${{ secrets.GOOGLE_CLOUD_PROJECT }} --data-file=-
+          EC2=$?
+          if [ $EC1 -eq 0 ] && [ $EC2 -eq 0 ]; then
+            echo "DEPLOY_FUNCTIONS=1" >> $GITHUB_ENV
+            echo "✅ Functions secrets set; will deploy functions."
+          else
+            echo "DEPLOY_FUNCTIONS=0" >> $GITHUB_ENV
+            echo "⚠️ Could not set functions secrets (likely IAM). Will skip functions deploy."
+          fi
 
       - name: Install frontend dependencies
         run: |
@@ -122,7 +129,12 @@ jobs:
           NODE_ENV: staging
         run: |
           cd frontend
-          firebase deploy --only hosting:82ndrop-staging,functions,firestore,storage,database --project=${{ secrets.GOOGLE_CLOUD_PROJECT }}
+          TARGETS="hosting:82ndrop-staging,firestore,storage,database"
+          if [ "${DEPLOY_FUNCTIONS}" = "1" ]; then
+            TARGETS="functions,$TARGETS"
+          fi
+          echo "Deploying targets: $TARGETS"
+          firebase deploy --only $TARGETS --project=${{ secrets.GOOGLE_CLOUD_PROJECT }}
 
   notify-success:
     name: Notify Staging Success
