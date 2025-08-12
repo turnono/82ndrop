@@ -8,6 +8,9 @@ import uvicorn
 from google.adk.cli.fast_api import get_fast_api_app
 from datetime import datetime
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
+from time import time
 import vertexai
 import google.generativeai as genai
 import asyncio
@@ -103,13 +106,54 @@ app: FastAPI = get_fast_api_app(
 # Add Firebase authentication middleware
 app.add_middleware(FirebaseAuthMiddleware)
 
+# Simple fixed-window rate limiter per IP (very conservative defaults)
+RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "60"))  # reqs
+RATE_LIMIT_WINDOW_SEC = int(os.getenv("RATE_LIMIT_WINDOW_SEC", "60"))  # per seconds
+_RATE_BUCKET = {}
+
+@app.middleware("http")
+async def rate_limiter(request: Request, call_next):
+    client_ip = request.client.host if request.client else "unknown"
+    now = int(time())
+    key = (client_ip, now // RATE_LIMIT_WINDOW_SEC)
+    count = _RATE_BUCKET.get(key, 0) + 1
+    _RATE_BUCKET[key] = count
+    if count > RATE_LIMIT_REQUESTS:
+        return JSONResponse(status_code=429, content={"detail": "Too Many Requests"})
+    return await call_next(request)
+
 # Health check endpoint (no auth required)
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
+# Simple user profile endpoint expected by the frontend
+@app.get("/user-profile")
+async def user_profile(request: Request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    # Extract claims safely with fallbacks
+    uid = user.get("uid") or user.get("user_id")
+    email = user.get("email")
+    display_name = user.get("name") or user.get("display_name")
+    access_level = user.get("access_level", "basic")
+    permissions = user.get("agent_permissions", {})
+    agent_access = bool(user.get("agent_access", False))
+
+    return {
+        "uid": uid,
+        "email": email,
+        "display_name": display_name,
+        "agent_access": agent_access,
+        "access_level": access_level,
+        "permissions": permissions,
+    }
+
 # Mock mode configuration - force mock mode if no API keys
-MOCK_MODE = True if not HAVE_API_KEYS else True  # Set to False to use real video generation when keys are present
+# Keep mock mode enabled by default for stability; flip to False when ready
+MOCK_MODE = True if not HAVE_API_KEYS else True
 
 # Mock video pool - pre-selected videos that already exist in the bucket
 MOCK_VIDEOS = [
@@ -125,6 +169,10 @@ mock_operations = {}
 @app.post("/toggle-mock")
 async def toggle_mock(request: Request):
     """Toggle mock mode on/off."""
+    # Only admins can toggle mock mode
+    user = getattr(request.state, "user", None)
+    if not user or not user.get("admin", False):
+        raise HTTPException(status_code=403, detail="Only admins can toggle mock mode")
     global MOCK_MODE
     MOCK_MODE = not MOCK_MODE
     return {
@@ -476,7 +524,7 @@ async def deduct_credits(request: Request):
             return {"success": True, "message": "Credits not deducted in mock mode"}
 
         # Get current user claims
-        firebase_user = await auth.get_user(user['uid'])
+        firebase_user = auth.get_user(user['uid'])
         current_claims = firebase_user.custom_claims or {}
         current_credits = current_claims.get('credits', 0)
 
@@ -489,7 +537,7 @@ async def deduct_credits(request: Request):
             **current_claims,
             'credits': current_credits - amount
         }
-        await auth.set_custom_user_claims(user['uid'], new_claims)
+        auth.set_custom_user_claims(user['uid'], new_claims)
 
         return {
             "success": True,
@@ -517,10 +565,10 @@ async def reset_monthly_credits(request: Request):
             raise HTTPException(status_code=403, detail="Only admins can reset credits")
 
         # List all users
-        users = await auth.list_users()
         updated_count = 0
 
-        for firebase_user in users.users:
+        # Iterate all users in the project
+        for firebase_user in auth.list_users().iterate_all():
             try:
                 # Get current claims
                 current_claims = firebase_user.custom_claims or {}
@@ -531,7 +579,7 @@ async def reset_monthly_credits(request: Request):
                     'credits': current_claims.get('credits', 0) + FREE_CREDITS_PER_MONTH,
                     'last_credit_reset': datetime.now().isoformat()
                 }
-                await auth.set_custom_user_claims(firebase_user.uid, new_claims)
+                auth.set_custom_user_claims(firebase_user.uid, new_claims)
                 updated_count += 1
             except Exception as e:
                 logger.error(f"Error updating credits for user {firebase_user.uid}: {str(e)}")

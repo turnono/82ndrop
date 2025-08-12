@@ -12,6 +12,7 @@ env.*
 
 frontend/dist/
 frontend/node_modules/
+.npm-cache/
 .firebase/
 .vscode/
 
