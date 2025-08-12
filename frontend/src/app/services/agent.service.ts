@@ -1,12 +1,11 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, BehaviorSubject, throwError } from 'rxjs';
-import { catchError, switchMap } from 'rxjs/operators';
+import { BehaviorSubject, Observable, firstValueFrom, from } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 import { AuthService } from './auth.service';
 import { SessionHistoryService } from './session-history.service';
 import { environment } from '../../environments/environment';
-import { tap } from 'rxjs/operators';
-import { from } from 'rxjs';
+import { Functions, httpsCallable } from '@angular/fire/functions';
 
 export interface ChatMessage {
   message: string;
@@ -20,7 +19,6 @@ export interface ChatResponse {
   timestamp: string;
 }
 
-// ADK-specific interfaces
 export interface AgentRunRequest {
   appName: string;
   userId: string;
@@ -67,7 +65,7 @@ export interface VideoGenerationResponse {
   error?: string; // For error messages when status is 'error'
 }
 
-interface MockResponse {
+export interface MockResponse {
   mock_mode: boolean;
   message: string;
 }
@@ -80,30 +78,22 @@ export class AgentService {
   private currentSessionId: string | null = null;
   private appName = 'drop_agent';
 
-  // Observable for chat messages
   private messagesSubject = new BehaviorSubject<any[]>([]);
   public messages$ = this.messagesSubject.asObservable();
-
-  // Mock mode state
-  private mockModeSubject = new BehaviorSubject<boolean>(true);
-  mockMode$ = this.mockModeSubject.asObservable();
 
   constructor(
     private http: HttpClient,
     private authService: AuthService,
-    private sessionHistoryService: SessionHistoryService
+    private sessionHistoryService: SessionHistoryService,
+    private functions: Functions
   ) {}
 
-  /**
-   * Get authenticated HTTP headers with Firebase ID token
-   */
   private async getAuthHeaders(): Promise<HttpHeaders> {
     const user = this.authService.getCurrentUser();
     if (!user) {
       throw new Error('User not authenticated');
     }
 
-    // Get the Firebase user for token operations
     const firebaseUser = this.authService.getFirebaseUser();
     if (!firebaseUser) {
       throw new Error('Firebase user not available');
@@ -111,23 +101,34 @@ export class AgentService {
 
     const token = await firebaseUser.getIdToken();
     return new HttpHeaders({
-      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
     });
   }
 
-  /**
-   * Get user profile and permissions
-   */
   async getUserProfile(): Promise<UserProfile> {
+    const user = this.authService.getCurrentUser();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    const firebaseUser = this.authService.getFirebaseUser();
+    if (!firebaseUser) {
+      throw new Error('Firebase user not available');
+    }
+
+    const token = await firebaseUser.getIdToken();
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    });
+
     try {
-      const headers = await this.getAuthHeaders();
-      const response = await this.http
-        .get<UserProfile>(`${this.apiUrl}/user/profile`, { headers })
-        .toPromise();
-      if (!response) {
-        throw new Error('No response received from server');
-      }
+      const response = await firstValueFrom(
+        this.http.get<UserProfile>(`${this.apiUrl}/user-profile`, {
+          headers,
+        })
+      );
       return response;
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -135,30 +136,31 @@ export class AgentService {
     }
   }
 
-  /**
-   * Create a new session using ADK endpoints
-   */
   private async createSession(): Promise<Session> {
-    try {
-      const headers = await this.getAuthHeaders();
-      const user = this.authService.getCurrentUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
+    const user = this.authService.getCurrentUser();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
 
-      const userId = user.uid;
-      const response = await this.http
-        .post<Session>(
-          `${this.apiUrl}/apps/${this.appName}/users/${userId}/sessions`,
+    const firebaseUser = this.authService.getFirebaseUser();
+    if (!firebaseUser) {
+      throw new Error('Firebase user not available');
+    }
+
+    const token = await firebaseUser.getIdToken();
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    });
+
+    try {
+      const response = await firstValueFrom(
+        this.http.post<Session>(
+          `${this.apiUrl}/apps/${this.appName}/users/${user.uid}/sessions`,
           {},
           { headers }
         )
-        .toPromise();
-
-      if (!response) {
-        throw new Error('Failed to create session');
-      }
-
+      );
       return response;
     } catch (error) {
       console.error('Error creating session:', error);
@@ -168,82 +170,127 @@ export class AgentService {
 
   async sendMessageWithSSE(
     message: string,
-    onUpdate: (update: any) => void
-  ): Promise<ChatResponse> {
+    onUpdate: (update: any) => void,
+    onComplete: (finalResponse: ChatResponse) => void,
+    onError: (error: any) => void
+  ): Promise<void> {
     const user = this.authService.getCurrentUser();
     if (!user) {
-      throw new Error('User not authenticated');
+      throw new Error("User not authenticated");
     }
 
     if (!this.currentSessionId) {
       const session = await this.createSession();
       this.currentSessionId = session.id;
-      await this.sessionHistoryService.createSession(
-        `Video Session - ${new Date().toLocaleDateString()}`,
-        session.id
-      );
     }
 
     const firebaseUser = this.authService.getFirebaseUser();
     if (!firebaseUser) {
-      throw new Error('Firebase user not available');
+      throw new Error("Firebase user not available");
     }
     const token = await firebaseUser.getIdToken();
 
-    const runRequest = {
-      appName: this.appName,
-      userId: user.uid,
-      sessionId: this.currentSessionId,
-      newMessage: {
+    const requestBody = {
+      app_name: this.appName,
+      user_id: user.uid,
+      session_id: this.currentSessionId,
+      new_message: {
         role: 'user',
         parts: [{ text: message }],
       },
-      streaming: true,
     };
 
-    const response = await fetch(`${this.apiUrl}/run_sse`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(runRequest),
-    });
+    try {
+      const response = await fetch(`${this.apiUrl}/run_sse`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-    if (!response.body) {
-      throw new Error('No response body');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let lastMessage = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const json = JSON.parse(line.substring(6));
-          onUpdate(json);
-          if (json.content && json.content.parts && json.content.parts[0] && json.content.parts[0].text) {
-            lastMessage = json.content.parts[0].text;
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Failed to get response reader');
+      }
+
+      const decoder = new TextDecoder();
+      let lastMessage = '';
+      let buffer = '';
+
+      const processStream = async () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            // The stream has finished.
+            // If a final message was captured, we can consider it complete.
+            onComplete({
+              response: lastMessage,
+              session_id: this.currentSessionId!,
+              user_id: user.uid,
+              timestamp: new Date().toISOString(),
+            });
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data:')) {
+              try {
+                const json = line.substring(5).trim();
+                if (json) {
+                  const data = JSON.parse(json);
+                  onUpdate(data);
+
+                  // Capture the last text message as the potential final response
+                  if (data.content && data.content.parts && data.content.parts[0] && data.content.parts[0].text) {
+                    lastMessage = data.content.parts[0].text;
+                  }
+                }
+              } catch (error) {
+                console.error('Error parsing SSE data:', error);
+              }
+            }
           }
         }
-      }
-    }
+      };
 
-    return {
-      response: lastMessage,
-      session_id: this.currentSessionId,
-      user_id: user.uid,
-      timestamp: new Date().toISOString(),
-    };
+      processStream().catch(onError);
+
+    } catch (error) {
+      console.error('SSE fetch error:', error);
+      onError(error);
+    }
+  }
+
+  async initializePayment(email: string, amount: number): Promise<any> {
+    const initializePaymentUrl =
+      'https://us-central1-taajirah.cloudfunctions.net/initializePayment';
+
+    const headers = await this.getAuthHeaders();
+    const url = initializePaymentUrl; // Use environment-specific URL
+    return firstValueFrom(
+      this.http.post<any>(url, { email, amount }, { headers })
+    );
+  }
+
+  async deductCredits(amount: number): Promise<any> {
+    const headers = await this.getAuthHeaders();
+    return firstValueFrom(
+      this.http.post<any>(
+        `${this.apiUrl}/deduct-credits`,
+        { amount },
+        { headers }
+      )
+    );
   }
 
   /**
@@ -297,12 +344,12 @@ export class AgentService {
         throw new Error('User not authenticated');
       }
 
-      const response = await this.http
-        .get<Session[]>(
+      const response = await firstValueFrom(
+        this.http.get<Session[]>(
           `${this.apiUrl}/apps/${this.appName}/users/${user.uid}/sessions`,
           { headers }
         )
-        .toPromise();
+      );
 
       return response || [];
     } catch (error) {
@@ -322,12 +369,12 @@ export class AgentService {
         throw new Error('User not authenticated');
       }
 
-      return this.http
-        .delete(
+      return firstValueFrom(
+        this.http.delete(
           `${this.apiUrl}/apps/${this.appName}/users/${user.uid}/sessions/${sessionId}`,
           { headers }
         )
-        .toPromise();
+      );
     } catch (error) {
       console.error('Error deleting session:', error);
       throw error;
@@ -340,8 +387,9 @@ export class AgentService {
   async checkHealth(): Promise<any> {
     try {
       const headers = await this.getAuthHeaders();
-      // Use list-apps endpoint as a health check since /health doesn't exist in ADK
-      return this.http.get(`${this.apiUrl}/list-apps`, { headers }).toPromise();
+      return firstValueFrom(
+        this.http.get(`${this.apiUrl}/list-apps`, { headers })
+      );
     } catch (error) {
       console.error('Error checking API health:', error);
       throw error;
@@ -354,9 +402,9 @@ export class AgentService {
   async listApps(): Promise<string[]> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await this.http
-        .get<string[]>(`${this.apiUrl}/list-apps`, { headers })
-        .toPromise();
+      const response = await firstValueFrom(
+        this.http.get<string[]>(`${this.apiUrl}/list-apps`, { headers })
+      );
 
       return response || [];
     } catch (error) {
@@ -390,7 +438,11 @@ export class AgentService {
       throw new Error('User not authenticated');
     }
 
-    if (user.email !== 'turnono@gmail.com') {
+    // Get mock status
+    const mockStatus = await firstValueFrom(this.getMockStatus());
+
+    // Only check email authorization in non-mock mode
+    if (!mockStatus.mock_mode && user.email !== 'turnono@gmail.com') {
       throw new Error('User not authorized for video generation');
     }
 
@@ -400,8 +452,8 @@ export class AgentService {
     }
 
     const headers = await this.getAuthHeaders();
-    const response = await this.http
-      .post<VideoGenerationResponse>(
+    const response = await firstValueFrom(
+      this.http.post<VideoGenerationResponse>(
         `${this.apiUrl}/generate-video`,
         {
           prompt,
@@ -410,13 +462,12 @@ export class AgentService {
         },
         { headers }
       )
-      .toPromise();
+    );
 
     if (!response) {
       throw new Error('No response received from video generation');
     }
 
-    // Transform the video URL if it exists in the response
     if (response.video_uri) {
       response.videoUrl = this.transformGcsUrl(response.video_uri);
     }
@@ -430,9 +481,9 @@ export class AgentService {
   async checkVideoStatus(jobId: string): Promise<any> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await this.http
-        .get<any>(`${this.apiUrl}/video-status/${jobId}`, { headers })
-        .toPromise();
+      const response = await firstValueFrom(
+        this.http.get<any>(`${this.apiUrl}/video-status/${jobId}`, { headers })
+      );
 
       return response;
     } catch (error) {
@@ -447,9 +498,13 @@ export class AgentService {
   async cancelVideoGeneration(jobId: string): Promise<any> {
     try {
       const headers = await this.getAuthHeaders();
-      const response = await this.http
-        .post<any>(`${this.apiUrl}/cancel-video/${jobId}`, {}, { headers })
-        .toPromise();
+      const response = await firstValueFrom(
+        this.http.post<any>(
+          `${this.apiUrl}/cancel-video/${jobId}`,
+          {},
+          { headers }
+        )
+      );
 
       return response;
     } catch (error) {
@@ -458,32 +513,11 @@ export class AgentService {
     }
   }
 
-  // Toggle mock mode
-  toggleMockMode(): Observable<MockResponse> {
-    return from(this.getAuthHeaders()).pipe(
-      switchMap((headers) =>
-        this.http
-          .post<MockResponse>(`${this.apiUrl}/toggle-mock`, {}, { headers })
-          .pipe(
-            tap((response) => {
-              this.mockModeSubject.next(response.mock_mode);
-            })
-          )
-      )
-    );
-  }
-
   // Get mock mode status
   getMockStatus(): Observable<MockResponse> {
     return from(this.getAuthHeaders()).pipe(
       switchMap((headers) =>
-        this.http
-          .get<MockResponse>(`${this.apiUrl}/mock-status`, { headers })
-          .pipe(
-            tap((response) => {
-              this.mockModeSubject.next(response.mock_mode);
-            })
-          )
+        this.http.get<MockResponse>(`${this.apiUrl}/mock-status`, { headers })
       )
     );
   }

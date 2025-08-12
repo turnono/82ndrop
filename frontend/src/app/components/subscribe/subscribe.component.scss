@@ -1,0 +1,99 @@
+:host {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #f8f9fa;
+  font-family: 'Inter', sans-serif;
+}
+
+.subscribe-container {
+  max-width: 900px;
+  width: 100%;
+  padding: 40px;
+  text-align: center;
+}
+
+.header {
+  margin-bottom: 40px;
+  h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #343a40;
+  }
+  p {
+    font-size: 1.1rem;
+    color: #6c757d;
+    max-width: 600px;
+    margin: 10px auto 0;
+  }
+}
+
+.credit-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 30px;
+}
+
+.credit-option {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid #e9ecef;
+
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  h3 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: #495057;
+    margin: 0 0 10px;
+  }
+
+  .price {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #343a40;
+    margin-bottom: 20px;
+    span {
+      font-size: 1rem;
+      font-weight: 500;
+      color: #6c757d;
+    }
+  }
+
+  .purchase-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: transform 0.2s;
+    width: 100%;
+
+    &:hover {
+      transform: translateY(-2px);
+    }
+  }
+}
+
+.back-link {
+  display: inline-block;
+  margin-top: 40px;
+  color: #6c757d;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+
+  &:hover {
+    color: #343a40;
+  }
+}

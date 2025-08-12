@@ -1,12 +1,15 @@
 export const environment = {
   production: false,
   apiUrl: 'https://drop-agent-staging-855515190257.us-central1.run.app', // Staging backend
+  allowlistedVideoUsers: [
+    'turnono@gmail.com',
+  ],
   paystack: {
     publicKey: 'pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
     secretKey: 'sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
   },
   firebase: {
-    apiKey: 'AIzaSyDGaH72jq3Ev-Jue-5qm72OzpRCWzQMh9U',
+    apiKey: 'AIzaSyBOEwSrq5bNlPqEpysEy8dedSYV9HrI4ek',
     authDomain: 'taajirah.firebaseapp.com',
     databaseURL:
       'https://taajirah-default-rtdb.europe-west1.firebasedatabase.app',

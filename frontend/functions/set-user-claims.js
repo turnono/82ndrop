@@ -79,14 +79,15 @@ exports.revokeAgentAccess = async (req, res) => {
  */
 exports.onUserCreate = async (user) => {
   try {
-    // Automatically grant basic access to new users
+    // Automatically grant basic access and free credits to new users
     const customClaims = {
       agent_access: true,
       access_level: "basic",
+      credits: 50, // Grant 50 free credits on sign-up
       agent_permissions: {
         "82ndrop": true,
         video_prompts: true,
-        search_agent: false, // Premium feature
+        search_agent: true,
         guide_agent: true,
         prompt_writer: true,
       },
@@ -94,7 +95,9 @@ exports.onUserCreate = async (user) => {
     };
 
     await getAuth().setCustomUserClaims(user.uid, customClaims);
-    console.log(`Auto-granted agent access to new user: ${user.uid}`);
+    console.log(
+      `Auto-granted agent access and 50 credits to new user: ${user.uid}`
+    );
   } catch (error) {
     console.error("Error auto-granting access:", error);
   }
