@@ -95,6 +95,16 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
+      - name: Ensure Functions Secrets in Secret Manager (production)
+        env:
+          PAYSTACK_LIVE_SECRET_KEY: ${{ secrets.PAYSTACK_LIVE_SECRET_KEY }}
+          PAYSTACK_SANDBOX_SECRET_KEY: ${{ secrets.PAYSTACK_SANDBOX_SECRET_KEY }}
+        run: |
+          # Create or update required secrets so deployment validation passes
+          echo -n "$PAYSTACK_LIVE_SECRET_KEY" | firebase functions:secrets:set PAYSTACK_LIVE_SECRET_KEY --project=${{ secrets.GOOGLE_CLOUD_PROJECT }} --data-file=-
+          # Also set sandbox in case function references remain; harmless in prod
+          echo -n "${PAYSTACK_SANDBOX_SECRET_KEY:-placeholder}" | firebase functions:secrets:set PAYSTACK_SANDBOX_SECRET_KEY --project=${{ secrets.GOOGLE_CLOUD_PROJECT }} --data-file=-
+
       - name: Install frontend dependencies
         run: |
           cd frontend
