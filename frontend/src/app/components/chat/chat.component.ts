@@ -110,7 +110,7 @@ interface ChatMessage {
                 (click)="onGenerateVideoClick()"
                 class="primary-btn"
                 [disabled]="
-                  isGeneratingVideo || isGeneratingImage || !generatedImageUrl
+                  isGeneratingVideo || isGeneratingImage
                 "
               >
                 {{
@@ -982,6 +982,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       }
       this.addAgentMessage(finalResponse.response, finalResponse.timestamp);
       this.isLoading = false;
+
+      // Check if the response is a video prompt and the user is authorized
+      if (finalResponse.response.includes('Generate a single, cohesive vertical short-form video') && this.isAuthorizedForVideo()) {
+        this.imagePrompt = finalResponse.response;
+        this.showGenerateImagePrompt = true;
+      }
     };
 
     const onError = (error: any) => {
