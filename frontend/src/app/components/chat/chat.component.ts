@@ -23,7 +23,6 @@ import { Subscription, Observable, firstValueFrom, of } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { AI, getImagenModel, ImagenModel } from '@angular/fire/ai';
 import { RouterModule } from '@angular/router';
-import { environment } from '../../../environments/environment';
 
 interface ChatMessage {
   type: 'user' | 'agent' | 'system' | 'progress';
@@ -110,9 +109,7 @@ interface ChatMessage {
               <button
                 (click)="onGenerateVideoClick()"
                 class="primary-btn"
-                [disabled]="
-                  isGeneratingVideo || isGeneratingImage
-                "
+                [disabled]="isGeneratingVideo || isGeneratingImage"
               >
                 {{
                   isGeneratingVideo ? '🎬 Generating...' : '🎬 Generate Video'
@@ -962,7 +959,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.shouldScrollToBottom = true;
 
     const onUpdate = (update: any) => {
-      const progressIndex = this.messages.findIndex(m => m.type === 'progress');
+      const progressIndex = this.messages.findIndex(
+        (m) => m.type === 'progress'
+      );
       if (progressIndex !== -1) {
         const workflowSteps = this.messages[progressIndex].workflowSteps || [];
         if (update.author) {
@@ -977,7 +976,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     };
 
     const onComplete = (finalResponse: ChatResponse) => {
-      const progressIndex = this.messages.findIndex(m => m.type === 'progress');
+      const progressIndex = this.messages.findIndex(
+        (m) => m.type === 'progress'
+      );
       if (progressIndex !== -1) {
         this.messages.splice(progressIndex, 1);
       }
@@ -985,7 +986,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       this.isLoading = false;
 
       // Check if the response is a video prompt and the user is authorized
-      if (finalResponse.response.includes('Generate a single, cohesive vertical short-form video') && this.isAuthorizedForVideo()) {
+      if (
+        finalResponse.response.includes(
+          'Generate a single, cohesive vertical short-form video'
+        ) &&
+        this.isAuthorizedForVideo()
+      ) {
         this.imagePrompt = finalResponse.response;
         this.showGenerateImagePrompt = true;
       }
@@ -993,15 +999,25 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
     const onError = (error: any) => {
       console.error('Error sending message:', error);
-      const progressIndex = this.messages.findIndex(m => m.type === 'progress');
+      const progressIndex = this.messages.findIndex(
+        (m) => m.type === 'progress'
+      );
       if (progressIndex !== -1) {
         this.messages.splice(progressIndex, 1);
       }
-      this.addAgentMessage('Sorry, an error occurred. Please try again.', new Date().toISOString());
+      this.addAgentMessage(
+        'Sorry, an error occurred. Please try again.',
+        new Date().toISOString()
+      );
       this.isLoading = false;
     };
 
-    this.agentService.sendMessageWithSSE(userMessage, onUpdate, onComplete, onError);
+    this.agentService.sendMessageWithSSE(
+      userMessage,
+      onUpdate,
+      onComplete,
+      onError
+    );
   }
 
   onEnterKey(event: KeyboardEvent) {
@@ -1059,12 +1075,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
   // Call this after displaying the Master Prompt
   isAuthorizedForVideo(): boolean {
+    const user = this.authService.getCurrentUser();
     return (
-      this.mockMode ||
-      (!!this.authService.getCurrentUser()?.email &&
-        environment.allowlistedVideoUsers.includes(
-          this.authService.getCurrentUser()!.email!
-        ))
+      this.mockMode || !!user?.claims?.agent_permissions?.['video_prompts']
     );
   }
 
