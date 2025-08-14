@@ -1,9 +1,7 @@
 export const environment = {
   production: false,
   apiUrl: 'http://localhost:8000',
-  allowlistedVideoUsers: [
-    'turnono@gmail.com',
-  ],
+  allowlistedVideoUsers: [],
   paystack: {
     publicKey: 'pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
     secretKey: 'sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
